@@ -12,21 +12,41 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - bun-linux-x64
-          - bun-linux-x64-baseline
-          - bun-linux-x64-modern
-          - bun-linux-arm64
-          - bun-windows-x64
-          - bun-windows-x64-baseline
-          - bun-windows-x64-modern
-          - bun-windows-arm64
-          - bun-darwin-x64
-          - bun-darwin-arm64
+        include:
+          - target: bun-linux-x64
+            os: ubuntu-latest
+            artifact: video-link-debugger-linux-x64
+          - target: bun-linux-x64-baseline
+            os: ubuntu-latest
+            artifact: video-link-debugger-linux-x64-baseline
+          - target: bun-linux-x64-modern
+            os: ubuntu-latest
+            artifact: video-link-debugger-linux-x64-modern
+          - target: bun-linux-arm64
+            os: ubuntu-24.04-arm
+            artifact: video-link-debugger-linux-arm64
+          - target: bun-windows-x64
+            os: windows-latest
+            artifact: video-link-debugger-windows-x64.exe
+          - target: bun-windows-x64-baseline
+            os: windows-latest
+            artifact: video-link-debugger-windows-x64-baseline.exe
+          - target: bun-windows-x64-modern
+            os: windows-latest
+            artifact: video-link-debugger-windows-x64-modern.exe
+          - target: bun-windows-arm64
+            os: windows-11-arm
+            artifact: video-link-debugger-windows-arm64.exe
+          - target: bun-darwin-x64
+            os: macos-13
+            artifact: video-link-debugger-darwin-x64
+          - target: bun-darwin-arm64
+            os: macos-latest
+            artifact: video-link-debugger-darwin-arm64
     steps:
       - uses: actions/checkout@v4
 
@@ -34,24 +54,14 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - name: Compute artifact name
-        id: artifact
-        run: |
-          short="${{ matrix.target }}"
-          short="${short#bun-}"
-          name="video-link-debugger-${short}"
-          case "${{ matrix.target }}" in
-            bun-windows-*) name="${name}.exe" ;;
-          esac
-          echo "name=$name" >> "$GITHUB_OUTPUT"
-
       - name: Compile
-        run: bun build --compile --target=${{ matrix.target }} ./src/index.ts --outfile "${{ steps.artifact.outputs.name }}"
+        shell: bash
+        run: bun build --compile --target=${{ matrix.target }} ./src/index.ts --outfile "${{ matrix.artifact }}"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.artifact.outputs.name }}
-          path: ${{ steps.artifact.outputs.name }}
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
           if-no-files-found: error
           retention-days: 7
 
