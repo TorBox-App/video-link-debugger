@@ -150,12 +150,5 @@ export default defineCommand({
         ]),
       ),
     );
-    if (!canMulti) {
-      console.log(
-        `Multi-connection skipped: ${
-          !linkInfo.size ? "size unknown" : "server doesn't accept ranges"
-        }.`,
-      );
-    }
   },
 });
