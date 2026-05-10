@@ -53,6 +53,26 @@ video-link-debugger test --link https://example.com/video.mp4
 
 - `test` — Tests a video link and reports link information, network timings, seek behavior, and single- vs. multi-connection download speed.
 
+#### `test` flags
+
+By default `test` runs every phase. Pass any of these to skip a phase:
+
+| Flag | Short | Skips |
+| --- | --- | --- |
+| `--skip-timings` | `-T` | DNS / TCP / TLS / TTFB measurement and the **Network Timings** table |
+| `--skip-seek` | `-S` | Random seek probes and the **Seek Results** table |
+| `--skip-download` | `-D` | Single- and multi-connection downloads and the **Download Comparison** table |
+
+Link information is always printed.
+
+```bash
+video-link-debugger test https://example.com/video.mp4              # everything
+video-link-debugger test https://example.com/video.mp4 -D           # no downloads
+video-link-debugger test https://example.com/video.mp4 -T -S        # only download tests
+```
+
+> Short flags can't be bundled — write `-T -S`, not `-TS`.
+
 ## Development
 
 ```bash
