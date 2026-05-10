@@ -11,9 +11,19 @@ export type LinkInformation = {
     error?: string;
 }
 
-async function isVideoLink(headers: Headers): Promise<boolean> {
+const VIDEO_EXTENSIONS = new Set([
+    "mp4", "mkv", "webm", "mov", "avi", "flv", "wmv",
+    "m4v", "mpg", "mpeg", "ts", "m2ts", "3gp", "ogv", "vob",
+]);
+
+async function isVideoLink(headers: Headers, fileName: string | null): Promise<boolean> {
     const contentType = headers.get("Content-Type");
-    return contentType ? contentType.startsWith("video/") : false;
+    if (contentType?.startsWith("video/")) return true;
+    if (fileName) {
+        const ext = fileName.split(".").pop()?.toLowerCase();
+        if (ext && VIDEO_EXTENSIONS.has(ext)) return true;
+    }
+    return false;
 }
 
 async function getLinkName(headers: Headers, link: string): Promise<string> {
@@ -113,14 +123,15 @@ export async function getLinkInformation(link: string): Promise<LinkInformation>
             };
         }
 
+        const fileName = await getLinkName(response.headers, link);
         const data: LinkInformation = {
             status: response.status,
             contentType: response.headers.get("Content-Type"),
             size: await linkSize(response.headers),
             acceptsRanges: await linkAcceptsRanges(response.headers),
-            fileName: await getLinkName(response.headers, link),
+            fileName,
             domain: new URL(link).hostname,
-            isVideo: await isVideoLink(response.headers)
+            isVideo: await isVideoLink(response.headers, fileName)
         }
         return data;
     } catch (error) {

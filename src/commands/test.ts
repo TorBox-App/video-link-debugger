@@ -23,8 +23,11 @@ import {
   timingRows,
   seekRows,
   downloadRows,
+  seekStatsRows,
+  computeSeekStats,
   formatBytes,
   formatSpeed,
+  formatEta,
 } from "../library/tables";
 import { sendResultsToPrivatebin } from "../functions/privatebinFunctions";
 
@@ -51,7 +54,11 @@ function makeProgressBox(renderer: CliRenderer, title: string) {
       bar.content = "░".repeat(BAR_WIDTH);
     }
     const total = state.totalBytes !== null ? ` / ${formatBytes(state.totalBytes)}` : "";
-    stats.content = `${formatBytes(state.bytes)}${total}  ·  ${formatSpeed(state.bytesPerSecond)}`;
+    const eta =
+      state.totalBytes !== null && state.bytesPerSecond > 0
+        ? `  ·  ETA ${formatEta((state.totalBytes - state.bytes) / state.bytesPerSecond)}`
+        : "";
+    stats.content = `${formatBytes(state.bytes)}${total}  ·  ${formatSpeed(state.bytesPerSecond)}${eta}`;
   };
 
   const finish = (color: string) => {
@@ -100,6 +107,7 @@ export default defineCommand({
       : null;
 
     const results = new Map<TimingPhase, number>();
+    let latencyMs: number | null = null;
     if (!skipTimings && renderer) {
       const progressBox = new BoxRenderable(renderer, {
         borderStyle: "rounded",
@@ -115,9 +123,14 @@ export default defineCommand({
         rows.set(key, row);
         progressBox.add(row);
       }
+      const latencyRow = new TextRenderable(renderer, {
+        content: `⋯  Latency`,
+        fg: "#888888",
+      });
+      progressBox.add(latencyRow);
       renderer.root.add(progressBox);
 
-      await getLinkTimings(link, undefined, (phase, ms) => {
+      const linkTimings = await getLinkTimings(link, undefined, (phase, ms) => {
         results.set(phase, ms);
         const row = rows.get(phase);
         if (!row) return;
@@ -125,6 +138,14 @@ export default defineCommand({
         row.content = `✓  ${label.padEnd(16)} ${ms.toFixed(2)} ms`;
         row.fg = "#00d787";
       });
+      latencyMs = linkTimings?.tcp ?? null;
+      if (latencyMs !== null) {
+        latencyRow.content = `✓  ${"Latency".padEnd(16)} ${latencyMs.toFixed(2)} ms`;
+        latencyRow.fg = "#00d787";
+      } else {
+        latencyRow.content = `✗  Latency`;
+        latencyRow.fg = "#ff5f5f";
+      }
     }
 
     const seekResults = skipSeek
@@ -166,21 +187,25 @@ export default defineCommand({
       ? null
       : await sendResultsToPrivatebin({
           linkInfo: linkInfo,
-          timings: !skipTimings ? Object.fromEntries(results) : undefined,
-          seekResults: !skipSeek && seekResults ? seekResults : undefined,
+          timings: !skipTimings
+            ? { ...Object.fromEntries(results), latencyMs }
+            : undefined,
+          seekResults: !skipSeek && seekResults
+            ? { runs: seekResults, stats: computeSeekStats(seekResults) }
+            : undefined,
           downloadResults: !skipDownload ? { single: singleResult, multi: multiResult } : undefined,
         });
 
     console.log(renderTable("Link Information", linkInfoRows(linkInfo)));
     if (!skipTimings) {
-      console.log(renderTable("Network Timings", timingRows(results)));
+      console.log(renderTable("Network Timings", timingRows(results, latencyMs)));
     }
     if (!skipSeek && seekResults) {
       console.log(
         renderMultiTable(
           "Seek Results",
           ["#", "Status", "TTFB", "Receive", "Total"],
-          seekRows(seekResults),
+          [...seekRows(seekResults), ...seekStatsRows(seekResults)],
         ),
       );
     }

@@ -25,6 +25,17 @@ export function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(2)} s`;
 }
 
+export function formatEta(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "—";
+  const s = Math.round(seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  if (h > 0) return `${h}:${pad(m)}:${pad(sec)}`;
+  return `${m}:${pad(sec)}`;
+}
+
 export const PHASES: { key: TimingPhase; label: string }[] = [
   { key: "dns", label: "DNS Resolution" },
   { key: "tcp", label: "TCP Connect" },
@@ -46,13 +57,16 @@ export function renderTable(title: string, rows: [string, string][]): string {
   return [top, sep, ...body, bot].join("\n");
 }
 
+export type TableRow = string[] | "separator";
+
 export function renderMultiTable(
   title: string,
   headers: string[],
-  rows: string[][],
+  rows: TableRow[],
 ): string {
+  const dataRows = rows.filter((r): r is string[] => Array.isArray(r));
   const widths = headers.map((h, i) =>
-    Math.max(h.length, ...rows.map((r) => (r[i] ?? "").length)),
+    Math.max(h.length, ...dataRows.map((r) => (r[i] ?? "").length)),
   );
   const inner = widths.reduce((a, b) => a + b, 0) + (widths.length - 1) * 3 + 2;
   const titleBar = ` ${title} `;
@@ -60,9 +74,10 @@ export function renderMultiTable(
   const colSep = `├${widths.map((w) => "─".repeat(w + 2)).join("┬")}┤`;
   const headerLine = `│ ${headers.map((h, i) => h.padEnd(widths[i]!)).join(" │ ")} │`;
   const headerSep = `├${widths.map((w) => "─".repeat(w + 2)).join("┼")}┤`;
-  const bodyLines = rows.map(
-    (r) => `│ ${r.map((c, i) => (c ?? "").padEnd(widths[i]!)).join(" │ ")} │`,
-  );
+  const bodyLines = rows.map((r) => {
+    if (r === "separator") return headerSep;
+    return `│ ${r.map((c, i) => (c ?? "").padEnd(widths[i]!)).join(" │ ")} │`;
+  });
   const bot = `╰${widths.map((w) => "─".repeat(w + 2)).join("┴")}╯`;
   return [top, colSep, headerLine, headerSep, ...bodyLines, bot].join("\n");
 }
@@ -80,11 +95,18 @@ export function linkInfoRows(info: LinkInformation): [string, string][] {
   ];
 }
 
-export function timingRows(results: Map<TimingPhase, number>): [string, string][] {
-  return PHASES.map(({ key, label }) => [
+export function timingRows(
+  results: Map<TimingPhase, number>,
+  latencyMs?: number | null,
+): [string, string][] {
+  const rows: [string, string][] = PHASES.map(({ key, label }) => [
     label,
     results.has(key) ? `${results.get(key)!.toFixed(2)} ms` : "—",
   ]);
+  if (latencyMs !== undefined) {
+    rows.push(["Latency", latencyMs !== null ? `${latencyMs.toFixed(2)} ms` : "—"]);
+  }
+  return rows;
 }
 
 export function downloadRows(
@@ -113,4 +135,64 @@ export function seekRows(seeks: LinkTimings[]): string[][] {
     fmt(s.receive),
     fmt(s.total),
   ]);
+}
+
+export interface SeekStat {
+  avg: number;
+  stdev: number;
+  min: number;
+  max: number;
+}
+
+export interface SeekStats {
+  ttfb: SeekStat | null;
+  receive: SeekStat | null;
+  total: SeekStat | null;
+}
+
+function statsOf(values: number[]): SeekStat | null {
+  if (values.length === 0) return null;
+  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+  const stdev =
+    values.length < 2
+      ? 0
+      : Math.sqrt(
+          values.reduce((a, b) => a + (b - avg) ** 2, 0) / (values.length - 1),
+        );
+  return { avg, stdev, min: Math.min(...values), max: Math.max(...values) };
+}
+
+export function computeSeekStats(seeks: LinkTimings[]): SeekStats {
+  const collect = (pick: (s: LinkTimings) => number | null) =>
+    seeks.map(pick).filter((v): v is number => v !== null);
+  return {
+    ttfb: statsOf(collect((s) => s.wait)),
+    receive: statsOf(collect((s) => s.receive)),
+    total: statsOf(collect((s) => s.total)),
+  };
+}
+
+export function seekStatsRows(seeks: LinkTimings[]): TableRow[] {
+  const fmt = (n: number | null | undefined) =>
+    n === null || n === undefined ? "—" : `${n.toFixed(2)} ms`;
+  const stats = computeSeekStats(seeks);
+  const cols: Array<keyof SeekStat> = ["avg", "stdev", "min", "max"];
+  const labels: Record<keyof SeekStat, string> = {
+    avg: "Avg",
+    stdev: "Stdev",
+    min: "Min",
+    max: "Max",
+  };
+  const rows: TableRow[] = [];
+  for (const key of cols) {
+    rows.push("separator");
+    rows.push([
+      labels[key],
+      "",
+      fmt(stats.ttfb?.[key]),
+      fmt(stats.receive?.[key]),
+      fmt(stats.total?.[key]),
+    ]);
+  }
+  return rows;
 }
