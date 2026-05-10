@@ -1,6 +1,7 @@
 import * as dns from "node:dns/promises";
 import * as net from "node:net";
 import * as tls from "node:tls";
+import { createHash } from "node:crypto";
 import { headers } from "../library/http";
 import { LinkInformation } from "./linkValidation";
 
@@ -154,6 +155,7 @@ export interface DownloadResult {
     avgBytesPerSecond: number;
     statusCode: number | null;
     connections: number;
+    md5: string | null;
 }
 
 export interface DownloadProgress {
@@ -166,6 +168,7 @@ async function downloadOnce(
     link: string,
     range: { start: number; end: number } | undefined,
     onBytes: (delta: number) => void,
+    onChunk?: (chunk: Buffer) => void,
 ): Promise<{ statusCode: number | null; bytes: number }> {
     const url = new URL(link);
     const isHttps = url.protocol === "https:";
@@ -225,12 +228,14 @@ async function downloadOnce(
                         const bodyChunk = headerBuf.subarray(bodyStart);
                         bytes += bodyChunk.length;
                         onBytes(bodyChunk.length);
+                        onChunk?.(bodyChunk);
                     }
                     headerBuf = Buffer.alloc(0);
                 }
             } else {
                 bytes += chunk.length;
                 onBytes(chunk.length);
+                onChunk?.(chunk);
             }
         });
 
@@ -269,6 +274,7 @@ export async function downloadFull(
     };
 
     let statusCode: number | null = null;
+    let md5: string | null = null;
 
     try {
         if (useMulti) {
@@ -279,13 +285,22 @@ export async function downloadFull(
                 const e = Math.floor((size * (i + 1)) / connections) - 1;
                 ranges.push({ start: s, end: e });
             }
+            const hashers = ranges.map(() => createHash("md5"));
             const results = await Promise.all(
-                ranges.map((r) => downloadOnce(link, r, onBytes)),
+                ranges.map((r, i) =>
+                    downloadOnce(link, r, onBytes, (chunk) => hashers[i]!.update(chunk)),
+                ),
             );
             statusCode = results[0]?.statusCode ?? null;
+            const joined = hashers.map((h) => h.digest("hex")).join("");
+            md5 = createHash("md5").update(joined).digest("hex");
         } else {
-            const result = await downloadOnce(link, undefined, onBytes);
+            const hasher = createHash("md5");
+            const result = await downloadOnce(link, undefined, onBytes, (chunk) =>
+                hasher.update(chunk),
+            );
             statusCode = result.statusCode;
+            md5 = hasher.digest("hex");
         }
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -300,5 +315,6 @@ export async function downloadFull(
         avgBytesPerSecond: durationMs > 0 ? bytes / (durationMs / 1000) : 0,
         statusCode,
         connections: useMulti ? connections : 1,
+        md5,
     };
 }

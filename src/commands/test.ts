@@ -188,7 +188,7 @@ export default defineCommand({
       console.log(
         renderMultiTable(
           "Download Comparison",
-          ["Mode", "Conns", "Time", "Bytes", "Speed"],
+          ["Mode", "Conns", "Time", "Bytes", "Speed", "MD5"],
           downloadRows([
             { label: "Single", result: singleResult },
             ...(canMulti

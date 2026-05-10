@@ -92,13 +92,14 @@ export function downloadRows(
 ): string[][] {
   return results.map(({ label, result }) =>
     result === null
-      ? [label, "—", "—", "—", "—"]
+      ? [label, "—", "—", "—", "—", "—"]
       : [
           label,
           String(result.connections),
           formatDuration(result.durationMs),
           formatBytes(result.bytes),
           formatSpeed(result.avgBytesPerSecond),
+          result.md5 ?? "—",
         ],
   );
 }
