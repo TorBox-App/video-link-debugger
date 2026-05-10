@@ -1,0 +1,32 @@
+{
+  "name": "video-link-debugger",
+  "version": "0.1.0",
+  "description": "A CLI built with Bunli",
+  "author": "",
+  "bin": {
+    "video-link-debugger": "./dist/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "postinstall": "bunli generate",
+    "dev": "bun run src/index.ts",
+    "build": "bunli build",
+    "test": "bun test",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@bunli/core": "latest",
+    "@opentui/core": "^0.2.6"
+  },
+  "devDependencies": {
+    "@bunli/test": "latest",
+    "@tsconfig/bun": "1.0.10",
+    "@types/bun": "latest",
+    "bunli": "^0.9.1",
+    "typescript": "^5.0.0"
+  },
+  "bunli": {
+    "entry": "./src/index.ts",
+    "outDir": "./dist"
+  }
+}
