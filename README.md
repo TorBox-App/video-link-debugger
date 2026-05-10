@@ -1,2 +1,41 @@
 # video-link-debugger
-CLI debugging application which tests any video link, and simulates start, seek, and buffer times for comparison or racing. Open source for transparency.
+
+A CLI built with Bunli
+
+## Installation
+
+```bash
+bun install
+```
+
+## Development
+
+```bash
+bun dev -- [command]
+```
+
+## Building
+
+```bash
+bun run build
+```
+
+## Testing
+
+```bash
+bun test
+```
+
+## Usage
+
+```bash
+video-link-debugger hello --name World
+```
+
+## Commands
+
+- `hello` - A simple greeting command
+
+## License
+
+MIT
