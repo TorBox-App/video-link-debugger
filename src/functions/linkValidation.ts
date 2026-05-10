@@ -1,6 +1,6 @@
 import { headers } from "../library/http";
 
-type LinkInformation = {
+export type LinkInformation = {
     status: number;
     contentType: string | null;
     size: number | null;

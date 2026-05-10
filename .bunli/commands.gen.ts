@@ -4,25 +4,24 @@
 import type { Command, CLI, GeneratedOptionMeta, RegisteredCommands, CommandOptions, GeneratedCommandMeta } from '@bunli/core'
 import { createGeneratedHelpers, registerGeneratedStore } from '@bunli/core'
 
-import Hello from '../src/commands/hello.js'
+import Test from '../src/commands/test.js'
 
 // Narrow list of command names to avoid typeof-cycles in types
-const names = ['hello'] as const
+const names = ['test'] as const
 type GeneratedNames = typeof names[number]
 
 const modules: Record<GeneratedNames, Command<any>> = {
-  'hello': Hello
+  'test': Test
 } as const
 
 const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
-  'hello': {
-      name: 'hello',
-      description: 'Say hello to someone',
+  'test': {
+      name: 'test',
+      description: 'Tests a video link and simulates start, seek and buffering.',
       options: {
-        'name': { type: 'z.string.default', required: true, hasDefault: true, default: "World", description: 'Name to greet', short: 'n', schema: {"type":"zod","method":"default","args":[{"type":"literal","value":"World"}]}, validator: '(val) => true' },
-        'excited': { type: 'z.boolean.default', required: true, hasDefault: true, default: false, description: 'Add excitement!', short: 'e', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":335,"end":340,"loc":{"start":{"line":12,"column":40,"index":335},"end":{"line":12,"column":45,"index":340}},"value":false}}]}, validator: '(val) => true' }
+        'link': { type: 'z.url.optional', required: false, hasDefault: false, description: 'Link to test', short: 'l', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' }
       },
-      path: './src/commands/hello'
+      path: './src/commands/test'
     }
 } as const
 

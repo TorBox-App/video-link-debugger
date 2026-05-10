@@ -15,7 +15,8 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@bunli/core": "latest"
+    "@bunli/core": "latest",
+    "@opentui/core": "^0.2.6"
   },
   "devDependencies": {
     "@bunli/test": "latest",
