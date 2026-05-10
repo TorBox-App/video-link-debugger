@@ -7,6 +7,7 @@ export type LinkInformation = {
     acceptsRanges: boolean;
     fileName: string | null;
     isVideo: boolean;
+    domain: string;
     error?: string;
 }
 
@@ -106,6 +107,7 @@ export async function getLinkInformation(link: string): Promise<LinkInformation>
                 size: null,
                 acceptsRanges: false,
                 fileName: null,
+                domain: new URL(link).hostname,
                 isVideo: false,
                 error: `Failed to fetch link information: ${response.statusText} | ${response.status}`
             };
@@ -117,6 +119,7 @@ export async function getLinkInformation(link: string): Promise<LinkInformation>
             size: await linkSize(response.headers),
             acceptsRanges: await linkAcceptsRanges(response.headers),
             fileName: await getLinkName(response.headers, link),
+            domain: new URL(link).hostname,
             isVideo: await isVideoLink(response.headers)
         }
         return data;
@@ -128,6 +131,13 @@ export async function getLinkInformation(link: string): Promise<LinkInformation>
             acceptsRanges: false,
             fileName: null,
             isVideo: false,
+            domain: (() => {
+                try {
+                    return new URL(link).hostname;
+                } catch {
+                    return "unknown";
+                }
+            })(),
             error: (error as Error).message
         };
     }

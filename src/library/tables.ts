@@ -75,6 +75,7 @@ export function linkInfoRows(info: LinkInformation): [string, string][] {
     ["Accepts Ranges", String(info.acceptsRanges)],
     ["File Name", info.fileName ?? "—"],
     ["Is Video", String(info.isVideo)],
+    ["Domain", info.domain],
     ...(info.error ? ([["Error", info.error]] as [string, string][]) : []),
   ];
 }
