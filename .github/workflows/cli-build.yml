@@ -32,18 +32,12 @@ jobs:
           - target: bun-windows-x64
             os: windows-latest
             artifact: video-link-debugger-windows-x64.exe
-          - target: bun-windows-x64-baseline
-            os: windows-latest
-            artifact: video-link-debugger-windows-x64-baseline.exe
           - target: bun-windows-x64-modern
             os: windows-latest
             artifact: video-link-debugger-windows-x64-modern.exe
           - target: bun-windows-arm64
             os: windows-11-arm
             artifact: video-link-debugger-windows-arm64.exe
-          - target: bun-darwin-x64
-            os: macos-13
-            artifact: video-link-debugger-darwin-x64
           - target: bun-darwin-arm64
             os: macos-latest
             artifact: video-link-debugger-darwin-arm64
