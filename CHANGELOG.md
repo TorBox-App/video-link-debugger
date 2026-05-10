@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/TorBox-App/video-link-debugger/compare/v1.0.0...v1.1.0) (2026-05-10)
+
+
+### Features
+
+* downloading shows md5 hash ([e1ccff0](https://github.com/TorBox-App/video-link-debugger/commit/e1ccff08e541bf90b7b77326335b467b58d4c59d))
+* slight stats updates for better results and ux ([6e42553](https://github.com/TorBox-App/video-link-debugger/commit/6e425534fcc64f8fd89a1c0060fa32ebcce9d380))
+
 ## 1.0.0 (2026-05-10)
 
 
