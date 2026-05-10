@@ -6,11 +6,12 @@ export default defineCommand({
   name: "test" as const,
   description: "Tests a video link and simulates start, seek and buffering.",
   options: {
-    link: option(z.url(), { description: "Link to test", short: "l" }),
+    link: option(z.url().optional(), { description: "Link to test", short: "l" }),
   },
-  handler: async ({ spinner, flags }) => {
-    // validate the link first
-    const linkInfo = await getLinkInformation(flags.link);
+  handler: async ({ spinner, flags, positional }) => {
+    const link = z.url().parse(positional[0] ?? flags.link);
+
+    const linkInfo = await getLinkInformation(link);
     if (linkInfo.error) {
         console.error(`Error validating link: ${linkInfo.error}`);
     }
