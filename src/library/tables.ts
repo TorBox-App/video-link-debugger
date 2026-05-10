@@ -1,5 +1,29 @@
 import type { LinkInformation } from "../functions/linkValidation";
-import type { LinkTimings, TimingPhase } from "../functions/downloadFunctions";
+import type {
+  LinkTimings,
+  TimingPhase,
+  DownloadResult,
+} from "../functions/downloadFunctions";
+
+export function formatBytes(n: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(2)} ${units[i]}`;
+}
+
+export function formatSpeed(bytesPerSecond: number): string {
+  return `${formatBytes(bytesPerSecond)}/s`;
+}
+
+export function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms.toFixed(0)} ms`;
+  return `${(ms / 1000).toFixed(2)} s`;
+}
 
 export const PHASES: { key: TimingPhase; label: string }[] = [
   { key: "dns", label: "DNS Resolution" },
@@ -60,6 +84,22 @@ export function timingRows(results: Map<TimingPhase, number>): [string, string][
     label,
     results.has(key) ? `${results.get(key)!.toFixed(2)} ms` : "—",
   ]);
+}
+
+export function downloadRows(
+  results: { label: string; result: DownloadResult | null }[],
+): string[][] {
+  return results.map(({ label, result }) =>
+    result === null
+      ? [label, "—", "—", "—", "—"]
+      : [
+          label,
+          String(result.connections),
+          formatDuration(result.durationMs),
+          formatBytes(result.bytes),
+          formatSpeed(result.avgBytesPerSecond),
+        ],
+  );
 }
 
 export function seekRows(seeks: LinkTimings[]): string[][] {
