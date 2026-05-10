@@ -1,0 +1,87 @@
+name: cli-build
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - bun-linux-x64
+          - bun-linux-x64-baseline
+          - bun-linux-x64-modern
+          - bun-linux-arm64
+          - bun-windows-x64
+          - bun-windows-x64-baseline
+          - bun-windows-x64-modern
+          - bun-windows-arm64
+          - bun-darwin-x64
+          - bun-darwin-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
+
+      - name: Compute artifact name
+        id: artifact
+        run: |
+          short="${{ matrix.target }}"
+          short="${short#bun-}"
+          name="video-link-debugger-${short}"
+          case "${{ matrix.target }}" in
+            bun-windows-*) name="${name}.exe" ;;
+          esac
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Compile
+        run: bun build --compile --target=${{ matrix.target }} ./src/index.ts --outfile "${{ steps.artifact.outputs.name }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ steps.artifact.outputs.name }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create commit-hash prerelease
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.sha }}" \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "${{ github.sha }}" \
+            --notes "Automated build for commit ${{ github.sha }}" \
+            --prerelease \
+            dist/*
+
+      - name: Upload to release-please release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" dist/* \
+            --repo "${{ github.repository }}" \
+            --clobber
