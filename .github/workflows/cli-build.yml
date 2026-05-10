@@ -73,7 +73,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.sha }}" \
+          gh release create "commit-${{ github.sha }}" \
             --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" \
             --title "${{ github.sha }}" \
