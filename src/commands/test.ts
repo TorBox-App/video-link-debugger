@@ -26,6 +26,7 @@ import {
   formatBytes,
   formatSpeed,
 } from "../library/tables";
+import { sendResultsToPrivatebin } from "../functions/privatebinFunctions";
 
 const MULTI_CONNECTIONS = 4;
 const BAR_WIDTH = 40;
@@ -81,10 +82,15 @@ export default defineCommand({
       short: "D",
       argumentKind: "flag",
     }),
+    skipPastebin: option(z.boolean().default(false), {
+      description: "Skip uploading results to PrivateBin",
+      short: "P",
+      argumentKind: "flag",
+    }),
   },
   handler: async ({ flags, positional }) => {
     const link = z.url().parse(positional[0] ?? flags.link);
-    const { skipTimings, skipSeek, skipDownload } = flags;
+    const { skipTimings, skipSeek, skipDownload, skipPastebin } = flags;
 
     const linkInfo = await getLinkInformation(link);
 
@@ -156,6 +162,15 @@ export default defineCommand({
 
     renderer?.destroy();
 
+    const resultsUrl = skipPastebin
+      ? null
+      : await sendResultsToPrivatebin({
+          linkInfo: linkInfo,
+          timings: !skipTimings ? Object.fromEntries(results) : undefined,
+          seekResults: !skipSeek && seekResults ? seekResults : undefined,
+          downloadResults: !skipDownload ? { single: singleResult, multi: multiResult } : undefined,
+        });
+
     console.log(renderTable("Link Information", linkInfoRows(linkInfo)));
     if (!skipTimings) {
       console.log(renderTable("Network Timings", timingRows(results)));
@@ -182,6 +197,9 @@ export default defineCommand({
           ]),
         ),
       );
+    }
+    if (resultsUrl) {
+      console.log(`Results URL: ${resultsUrl}`);
     }
   },
 });

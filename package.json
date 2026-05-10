@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "@bunli/core": "latest",
-    "@opentui/core": "^0.2.6"
+    "@opentui/core": "^0.2.6",
+    "@pixelfactory/privatebin": "^2.6.2"
   },
   "devDependencies": {
     "@bunli/test": "latest",

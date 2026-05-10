@@ -19,7 +19,10 @@ const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
       name: 'test',
       description: 'Tests a video link and simulates start, seek and buffering.',
       options: {
-        'link': { type: 'z.url.optional', required: false, hasDefault: false, description: 'Link to test', short: 'l', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' }
+        'link': { type: 'z.url.optional', required: false, hasDefault: false, description: 'Link to test', short: 'l', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
+        'skipTimings': { type: 'z.boolean.default', required: true, hasDefault: true, default: false, description: 'Skip network timing measurements', short: 'T', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1996,"end":2001,"loc":{"start":{"line":69,"column":44,"index":1996},"end":{"line":69,"column":49,"index":2001}},"value":false}}]}, validator: '(val) => true' },
+        'skipSeek': { type: 'z.boolean.default', required: true, hasDefault: true, default: false, description: 'Skip random seek tests', short: 'S', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":2156,"end":2161,"loc":{"start":{"line":74,"column":41,"index":2156},"end":{"line":74,"column":46,"index":2161}},"value":false}}]}, validator: '(val) => true' },
+        'skipDownload': { type: 'z.boolean.default', required: true, hasDefault: true, default: false, description: 'Skip single- and multi-connection download tests', short: 'D', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":2310,"end":2315,"loc":{"start":{"line":79,"column":45,"index":2310},"end":{"line":79,"column":50,"index":2315}},"value":false}}]}, validator: '(val) => true' }
       },
       path: './src/commands/test'
     }

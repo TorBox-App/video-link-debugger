@@ -62,6 +62,7 @@ By default `test` runs every phase. Pass any of these to skip a phase:
 | `--skip-timings` | `-T` | DNS / TCP / TLS / TTFB measurement and the **Network Timings** table |
 | `--skip-seek` | `-S` | Random seek probes and the **Seek Results** table |
 | `--skip-download` | `-D` | Single- and multi-connection downloads and the **Download Comparison** table |
+| `--skip-pastebin` | `-P` | Uploading results to PrivateBin and printing the **Results URL** |
 
 Link information is always printed.
 
