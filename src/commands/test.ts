@@ -6,7 +6,11 @@ import {
   TextRenderable,
   type CliRenderer,
 } from "@opentui/core";
-import { getLinkInformation, blurFileName } from "../functions/linkValidation";
+import {
+  getLinkInformation,
+  blurFileName,
+  type LinkInformation,
+} from "../functions/linkValidation";
 import {
   getLinkTimings,
   type TimingPhase,
@@ -69,11 +73,175 @@ function makeProgressBox(renderer: CliRenderer, title: string) {
   return { box, update, finish };
 }
 
+type TestFlags = {
+  skipTimings: boolean;
+  skipSeek: boolean;
+  skipDownload: boolean;
+  skipPastebin: boolean;
+  noBlur: boolean;
+};
+
+type LinkOutcome = {
+  linkInfo: LinkInformation;
+  payload: Record<string, unknown>;
+  resultsUrl: string | null;
+};
+
+async function runLinkTest(link: string, flags: TestFlags): Promise<LinkOutcome> {
+  const { skipTimings, skipSeek, skipDownload, skipPastebin } = flags;
+
+  const linkInfo = await getLinkInformation(link);
+  if (!flags.noBlur && linkInfo.fileName) {
+    linkInfo.fileName = blurFileName(linkInfo.fileName);
+  }
+
+  const needsRenderer = !skipTimings || !skipDownload;
+  const renderer = needsRenderer
+    ? await createCliRenderer({ exitOnCtrlC: true })
+    : null;
+
+  const results = new Map<TimingPhase, number>();
+  let latencyMs: number | null = null;
+  if (!skipTimings && renderer) {
+    const progressBox = new BoxRenderable(renderer, {
+      borderStyle: "rounded",
+      padding: 1,
+      title: "Measuring",
+    });
+    const rows = new Map<TimingPhase, TextRenderable>();
+    for (const { key, label } of PHASES) {
+      const row = new TextRenderable(renderer, {
+        content: `⋯  ${label}`,
+        fg: "#888888",
+      });
+      rows.set(key, row);
+      progressBox.add(row);
+    }
+    const latencyRow = new TextRenderable(renderer, {
+      content: `⋯  Latency`,
+      fg: "#888888",
+    });
+    progressBox.add(latencyRow);
+    renderer.root.add(progressBox);
+
+    const linkTimings = await getLinkTimings(link, undefined, (phase, ms) => {
+      results.set(phase, ms);
+      const row = rows.get(phase);
+      if (!row) return;
+      const label = PHASES.find((p) => p.key === phase)?.label ?? phase;
+      row.content = `✓  ${label.padEnd(16)} ${ms.toFixed(2)} ms`;
+      row.fg = "#00d787";
+    });
+    latencyMs = linkTimings?.tcp ?? null;
+    if (latencyMs !== null) {
+      latencyRow.content = `✓  ${"Latency".padEnd(16)} ${latencyMs.toFixed(2)} ms`;
+      latencyRow.fg = "#00d787";
+    } else {
+      latencyRow.content = `✗  Latency`;
+      latencyRow.fg = "#ff5f5f";
+    }
+  }
+
+  const seekResults = skipSeek
+    ? null
+    : await SeekRandomMultipleTimes(linkInfo, link, 5);
+
+  let singleResult: DownloadResult | null = null;
+  let multiResult: DownloadResult | null = null;
+  const canMulti = !!linkInfo.size && linkInfo.acceptsRanges;
+
+  if (!skipDownload && renderer) {
+    const single = makeProgressBox(renderer, "Downloading (single connection)");
+    renderer.root.add(single.box);
+    singleResult = await downloadFull(link, {
+      connections: 1,
+      size: linkInfo.size ?? undefined,
+      onProgress: single.update,
+    });
+    single.finish(singleResult ? "#00d787" : "#ff5f5f");
+
+    if (canMulti) {
+      const multi = makeProgressBox(
+        renderer,
+        `Downloading (${MULTI_CONNECTIONS} connections)`,
+      );
+      renderer.root.add(multi.box);
+      multiResult = await downloadFull(link, {
+        connections: MULTI_CONNECTIONS,
+        size: linkInfo.size ?? undefined,
+        onProgress: multi.update,
+      });
+      multi.finish(multiResult ? "#00d787" : "#ff5f5f");
+    }
+  }
+
+  renderer?.destroy();
+
+  const payload: Record<string, unknown> = {
+    linkInfo,
+    timings: !skipTimings
+      ? { ...Object.fromEntries(results), latencyMs }
+      : undefined,
+    seekResults: !skipSeek && seekResults
+      ? { runs: seekResults, stats: computeSeekStats(seekResults) }
+      : undefined,
+    downloadResults: !skipDownload
+      ? { single: singleResult, multi: multiResult }
+      : undefined,
+  };
+
+  let resultsUrl: string | null = null;
+  if (!skipPastebin) {
+    try {
+      resultsUrl = await sendResultsToPrivatebin(payload);
+    } catch (err) {
+      console.error(`PrivateBin upload failed: ${(err as Error).message}`);
+    }
+  }
+
+  console.log(renderTable("Link Information", linkInfoRows(linkInfo)));
+  if (!skipTimings) {
+    console.log(renderTable("Network Timings", timingRows(results, latencyMs)));
+  }
+  if (!skipSeek && seekResults) {
+    console.log(
+      renderMultiTable(
+        "Seek Results",
+        ["#", "Status", "TTFB", "Receive", "Total"],
+        [...seekRows(seekResults), ...seekStatsRows(seekResults)],
+      ),
+    );
+  }
+  if (!skipDownload) {
+    console.log(
+      renderMultiTable(
+        "Download Comparison",
+        ["Mode", "Conns", "Time", "Bytes", "Speed", "MD5"],
+        downloadRows([
+          { label: "Single", result: singleResult },
+          ...(canMulti
+            ? [{ label: `Multi`, result: multiResult }]
+            : []),
+        ]),
+      ),
+    );
+  }
+  if (resultsUrl) {
+    console.log(`Results URL: ${resultsUrl}`);
+  }
+
+  return { linkInfo, payload, resultsUrl };
+}
+
 export default defineCommand({
   name: "test" as const,
   description: "Tests a video link and simulates start, seek and buffering.",
   options: {
     link: option(z.url().optional(), { description: "Link to test", short: "l" }),
+    file: option(z.string().optional(), {
+      description: "Path to a text file with one link per line",
+      short: "f",
+    }),
     skipTimings: option(z.boolean().default(false), {
       description: "Skip network timing measurements",
       short: "T",
@@ -101,138 +269,56 @@ export default defineCommand({
     }),
   },
   handler: async ({ flags, positional }) => {
-    const link = z.url().parse(positional[0] ?? flags.link);
-    const { skipTimings, skipSeek, skipDownload, skipPastebin } = flags;
-
-    const linkInfo = await getLinkInformation(link);
-    if (!flags.noBlur && linkInfo.fileName) {
-      linkInfo.fileName = blurFileName(linkInfo.fileName);
-    }
-
-    const needsRenderer = !skipTimings || !skipDownload;
-    const renderer = needsRenderer
-      ? await createCliRenderer({ exitOnCtrlC: true })
-      : null;
-
-    const results = new Map<TimingPhase, number>();
-    let latencyMs: number | null = null;
-    if (!skipTimings && renderer) {
-      const progressBox = new BoxRenderable(renderer, {
-        borderStyle: "rounded",
-        padding: 1,
-        title: "Measuring",
-      });
-      const rows = new Map<TimingPhase, TextRenderable>();
-      for (const { key, label } of PHASES) {
-        const row = new TextRenderable(renderer, {
-          content: `⋯  ${label}`,
-          fg: "#888888",
-        });
-        rows.set(key, row);
-        progressBox.add(row);
-      }
-      const latencyRow = new TextRenderable(renderer, {
-        content: `⋯  Latency`,
-        fg: "#888888",
-      });
-      progressBox.add(latencyRow);
-      renderer.root.add(progressBox);
-
-      const linkTimings = await getLinkTimings(link, undefined, (phase, ms) => {
-        results.set(phase, ms);
-        const row = rows.get(phase);
-        if (!row) return;
-        const label = PHASES.find((p) => p.key === phase)?.label ?? phase;
-        row.content = `✓  ${label.padEnd(16)} ${ms.toFixed(2)} ms`;
-        row.fg = "#00d787";
-      });
-      latencyMs = linkTimings?.tcp ?? null;
-      if (latencyMs !== null) {
-        latencyRow.content = `✓  ${"Latency".padEnd(16)} ${latencyMs.toFixed(2)} ms`;
-        latencyRow.fg = "#00d787";
-      } else {
-        latencyRow.content = `✗  Latency`;
-        latencyRow.fg = "#ff5f5f";
-      }
-    }
-
-    const seekResults = skipSeek
-      ? null
-      : await SeekRandomMultipleTimes(linkInfo, link, 5);
-
-    let singleResult: DownloadResult | null = null;
-    let multiResult: DownloadResult | null = null;
-    const canMulti = !!linkInfo.size && linkInfo.acceptsRanges;
-
-    if (!skipDownload && renderer) {
-      const single = makeProgressBox(renderer, "Downloading (single connection)");
-      renderer.root.add(single.box);
-      singleResult = await downloadFull(link, {
-        connections: 1,
-        size: linkInfo.size ?? undefined,
-        onProgress: single.update,
-      });
-      single.finish(singleResult ? "#00d787" : "#ff5f5f");
-
-      if (canMulti) {
-        const multi = makeProgressBox(
-          renderer,
-          `Downloading (${MULTI_CONNECTIONS} connections)`,
+    const fromFile: string[] = [];
+    if (flags.file) {
+      let text: string;
+      try {
+        text = await Bun.file(flags.file).text();
+      } catch (err) {
+        console.error(
+          `Could not read links file "${flags.file}": ${(err as Error).message}`,
         );
-        renderer.root.add(multi.box);
-        multiResult = await downloadFull(link, {
-          connections: MULTI_CONNECTIONS,
-          size: linkInfo.size ?? undefined,
-          onProgress: multi.update,
-        });
-        multi.finish(multiResult ? "#00d787" : "#ff5f5f");
+        process.exit(1);
       }
+      fromFile.push(
+        ...text
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line && !line.startsWith("#")),
+      );
     }
 
-    renderer?.destroy();
+    const links = z
+      .array(z.url())
+      .min(1, "No links provided. Pass links as arguments, with --link, or with --file <path>.")
+      .parse([...positional, ...(flags.link ? [flags.link] : []), ...fromFile]);
 
-    const resultsUrl = skipPastebin
-      ? null
-      : await sendResultsToPrivatebin({
-          linkInfo: linkInfo,
-          timings: !skipTimings
-            ? { ...Object.fromEntries(results), latencyMs }
-            : undefined,
-          seekResults: !skipSeek && seekResults
-            ? { runs: seekResults, stats: computeSeekStats(seekResults) }
-            : undefined,
-          downloadResults: !skipDownload ? { single: singleResult, multi: multiResult } : undefined,
+    const outcomes: LinkOutcome[] = [];
+    for (const [index, link] of links.entries()) {
+      if (links.length > 1) {
+        console.log(`\n━━━ Link ${index + 1} of ${links.length} ━━━`);
+      }
+      outcomes.push(await runLinkTest(link, flags));
+    }
+
+    if (links.length > 1 && !flags.skipPastebin) {
+      console.log("\nAll Results:");
+      outcomes.forEach((outcome, i) => {
+        const name = outcome.linkInfo.fileName ?? outcome.linkInfo.domain;
+        console.log(`  [${i + 1}] ${name}: ${outcome.resultsUrl ?? "—"}`);
+      });
+      try {
+        const combinedUrl = await sendResultsToPrivatebin({
+          results: outcomes.map((outcome, i) => ({
+            index: i + 1,
+            resultsUrl: outcome.resultsUrl,
+            ...outcome.payload,
+          })),
         });
-
-    console.log(renderTable("Link Information", linkInfoRows(linkInfo)));
-    if (!skipTimings) {
-      console.log(renderTable("Network Timings", timingRows(results, latencyMs)));
-    }
-    if (!skipSeek && seekResults) {
-      console.log(
-        renderMultiTable(
-          "Seek Results",
-          ["#", "Status", "TTFB", "Receive", "Total"],
-          [...seekRows(seekResults), ...seekStatsRows(seekResults)],
-        ),
-      );
-    }
-    if (!skipDownload) {
-      console.log(
-        renderMultiTable(
-          "Download Comparison",
-          ["Mode", "Conns", "Time", "Bytes", "Speed", "MD5"],
-          downloadRows([
-            { label: "Single", result: singleResult },
-            ...(canMulti
-              ? [{ label: `Multi`, result: multiResult }]
-              : []),
-          ]),
-        ),
-      );
-    }
-    if (resultsUrl) {
-      console.log(`Results URL: ${resultsUrl}`);
+        console.log(`Combined Results URL: ${combinedUrl}`);
+      } catch (err) {
+        console.error(`Combined PrivateBin upload failed: ${(err as Error).message}`);
+      }
     }
   },
 });

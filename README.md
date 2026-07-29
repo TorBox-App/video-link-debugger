@@ -76,11 +76,19 @@ chmod +x ~/Downloads/video-link-debugger-linux-x64
 video-link-debugger test https://example.com/video.mp4
 # or
 video-link-debugger test --link https://example.com/video.mp4
+# or multiple links at once
+video-link-debugger test https://a.example.com/1.mp4 https://b.example.com/2.mp4
+# or from a text file (one link per line)
+video-link-debugger test --file links.txt
 ```
 
 ### Commands
 
-- `test` — Tests a video link and reports link information, network timings, seek behavior, and single- vs. multi-connection download speed.
+- `test` — Tests one or more video links and reports link information, network timings, seek behavior, and single- vs. multi-connection download speed.
+
+Links can be passed as positional arguments, with `--link`/`-l`, or with `--file`/`-f` pointing to a text file containing one link per line (blank lines and lines starting with `#` are ignored). All sources are combined and tested one after another.
+
+When testing multiple links, each link uploads its own results and prints its **Results URL** as it completes; at the end, all results URLs are listed together with a **Combined Results URL** — a single PrivateBin paste containing every link's results.
 
 #### `test` flags
 
