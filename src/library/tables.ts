@@ -25,6 +25,22 @@ export function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(2)} s`;
 }
 
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+
+export function visibleLength(s: string): number {
+  return s.replace(ANSI_RE, "").length;
+}
+
+export function padVisible(s: string, width: number): string {
+  return s + " ".repeat(Math.max(0, width - visibleLength(s)));
+}
+
+const colorEnabled = process.stdout.isTTY && !process.env.NO_COLOR;
+
+export function highlight(s: string): string {
+  return colorEnabled ? `\x1b[1;32m${s}\x1b[0m` : s;
+}
+
 export function formatEta(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "—";
   const s = Math.round(seconds);
@@ -66,7 +82,7 @@ export function renderMultiTable(
 ): string {
   const dataRows = rows.filter((r): r is string[] => Array.isArray(r));
   const widths = headers.map((h, i) =>
-    Math.max(h.length, ...dataRows.map((r) => (r[i] ?? "").length)),
+    Math.max(h.length, ...dataRows.map((r) => visibleLength(r[i] ?? ""))),
   );
   const inner = widths.reduce((a, b) => a + b, 0) + (widths.length - 1) * 3 + 2;
   const titleBar = ` ${title} `;
@@ -76,7 +92,7 @@ export function renderMultiTable(
   const headerSep = `├${widths.map((w) => "─".repeat(w + 2)).join("┼")}┤`;
   const bodyLines = rows.map((r) => {
     if (r === "separator") return headerSep;
-    return `│ ${r.map((c, i) => (c ?? "").padEnd(widths[i]!)).join(" │ ")} │`;
+    return `│ ${r.map((c, i) => padVisible(c ?? "", widths[i]!)).join(" │ ")} │`;
   });
   const bot = `╰${widths.map((w) => "─".repeat(w + 2)).join("┴")}╯`;
   return [top, colSep, headerLine, headerSep, ...bodyLines, bot].join("\n");

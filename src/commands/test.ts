@@ -1,11 +1,6 @@
 import { defineCommand, option } from "@bunli/core";
 import { z } from "zod";
-import {
-  createCliRenderer,
-  BoxRenderable,
-  TextRenderable,
-  type CliRenderer,
-} from "@opentui/core";
+import { LiveBox, makeProgressBar, ok, err, dim } from "../library/progress";
 import {
   getLinkInformation,
   blurFileName,
@@ -14,7 +9,6 @@ import {
 import {
   getLinkTimings,
   type TimingPhase,
-  type DownloadProgress,
   type DownloadResult,
   SeekRandomMultipleTimes,
   downloadFull,
@@ -29,49 +23,10 @@ import {
   downloadRows,
   seekStatsRows,
   computeSeekStats,
-  formatBytes,
-  formatSpeed,
-  formatEta,
 } from "../library/tables";
 import { sendResultsToPrivatebin } from "../functions/privatebinFunctions";
 
 const MULTI_CONNECTIONS = 4;
-const BAR_WIDTH = 40;
-
-function makeProgressBox(renderer: CliRenderer, title: string) {
-  const box = new BoxRenderable(renderer, {
-    borderStyle: "rounded",
-    padding: 1,
-    title,
-  });
-  const bar = new TextRenderable(renderer, { content: "", fg: "#888888" });
-  const stats = new TextRenderable(renderer, { content: "", fg: "#888888" });
-  box.add(bar);
-  box.add(stats);
-
-  const update = (state: DownloadProgress) => {
-    if (state.totalBytes !== null && state.totalBytes > 0) {
-      const pct = Math.min(1, state.bytes / state.totalBytes);
-      const filled = Math.floor(pct * BAR_WIDTH);
-      bar.content = `${"█".repeat(filled)}${"░".repeat(BAR_WIDTH - filled)} ${(pct * 100).toFixed(1)}%`;
-    } else {
-      bar.content = "░".repeat(BAR_WIDTH);
-    }
-    const total = state.totalBytes !== null ? ` / ${formatBytes(state.totalBytes)}` : "";
-    const eta =
-      state.totalBytes !== null && state.bytesPerSecond > 0
-        ? `  ·  ETA ${formatEta((state.totalBytes - state.bytes) / state.bytesPerSecond)}`
-        : "";
-    stats.content = `${formatBytes(state.bytes)}${total}  ·  ${formatSpeed(state.bytesPerSecond)}${eta}`;
-  };
-
-  const finish = (color: string) => {
-    bar.fg = color;
-    stats.fg = color;
-  };
-
-  return { box, update, finish };
-}
 
 type TestFlags = {
   skipTimings: boolean;
@@ -95,51 +50,37 @@ async function runLinkTest(link: string, flags: TestFlags): Promise<LinkOutcome>
     linkInfo.fileName = blurFileName(linkInfo.fileName);
   }
 
-  const needsRenderer = !skipTimings || !skipDownload;
-  const renderer = needsRenderer
-    ? await createCliRenderer({ exitOnCtrlC: true })
-    : null;
-
   const results = new Map<TimingPhase, number>();
   let latencyMs: number | null = null;
-  if (!skipTimings && renderer) {
-    const progressBox = new BoxRenderable(renderer, {
-      borderStyle: "rounded",
-      padding: 1,
-      title: "Measuring",
-    });
-    const rows = new Map<TimingPhase, TextRenderable>();
-    for (const { key, label } of PHASES) {
-      const row = new TextRenderable(renderer, {
-        content: `⋯  ${label}`,
-        fg: "#888888",
-      });
-      rows.set(key, row);
-      progressBox.add(row);
-    }
-    const latencyRow = new TextRenderable(renderer, {
-      content: `⋯  Latency`,
-      fg: "#888888",
-    });
-    progressBox.add(latencyRow);
-    renderer.root.add(progressBox);
-
+  if (!skipTimings) {
+    const box = new LiveBox("Measuring");
+    const render = (force = false) =>
+      box.update(
+        [
+          ...PHASES.map(({ key, label }) =>
+            results.has(key)
+              ? ok(`✓  ${label.padEnd(16)} ${results.get(key)!.toFixed(2)} ms`)
+              : dim(`⋯  ${label}`),
+          ),
+          latencyMs !== null
+            ? ok(`✓  ${"Latency".padEnd(16)} ${latencyMs.toFixed(2)} ms`)
+            : dim(`⋯  Latency`),
+        ],
+        { force },
+      );
+    render(true);
     const linkTimings = await getLinkTimings(link, undefined, (phase, ms) => {
       results.set(phase, ms);
-      const row = rows.get(phase);
-      if (!row) return;
-      const label = PHASES.find((p) => p.key === phase)?.label ?? phase;
-      row.content = `✓  ${label.padEnd(16)} ${ms.toFixed(2)} ms`;
-      row.fg = "#00d787";
+      render();
     });
     latencyMs = linkTimings?.tcp ?? null;
-    if (latencyMs !== null) {
-      latencyRow.content = `✓  ${"Latency".padEnd(16)} ${latencyMs.toFixed(2)} ms`;
-      latencyRow.fg = "#00d787";
-    } else {
-      latencyRow.content = `✗  Latency`;
-      latencyRow.fg = "#ff5f5f";
-    }
+    box.finish(
+      results.size > 0
+        ? ok(
+            `✓  Network timings measured${latencyMs !== null ? `  ·  Latency ${latencyMs.toFixed(2)} ms` : ""}`,
+          )
+        : err("✗  Network timing measurement failed"),
+    );
   }
 
   const seekResults = skipSeek
@@ -150,32 +91,31 @@ async function runLinkTest(link: string, flags: TestFlags): Promise<LinkOutcome>
   let multiResult: DownloadResult | null = null;
   const canMulti = !!linkInfo.size && linkInfo.acceptsRanges;
 
-  if (!skipDownload && renderer) {
-    const single = makeProgressBox(renderer, "Downloading (single connection)");
-    renderer.root.add(single.box);
+  if (!skipDownload) {
+    const single = makeProgressBar("Downloading (single connection)");
+    let singleError: string | undefined;
     singleResult = await downloadFull(link, {
       connections: 1,
       size: linkInfo.size ?? undefined,
       onProgress: single.update,
+      onError: (m) => (singleError = m),
     });
-    single.finish(singleResult ? "#00d787" : "#ff5f5f");
+    single.finish(singleResult, singleError);
 
     if (canMulti) {
-      const multi = makeProgressBox(
-        renderer,
+      const multi = makeProgressBar(
         `Downloading (${MULTI_CONNECTIONS} connections)`,
       );
-      renderer.root.add(multi.box);
+      let multiError: string | undefined;
       multiResult = await downloadFull(link, {
         connections: MULTI_CONNECTIONS,
         size: linkInfo.size ?? undefined,
         onProgress: multi.update,
+        onError: (m) => (multiError = m),
       });
-      multi.finish(multiResult ? "#00d787" : "#ff5f5f");
+      multi.finish(multiResult, multiError);
     }
   }
-
-  renderer?.destroy();
 
   const payload: Record<string, unknown> = {
     linkInfo,

@@ -4,25 +4,44 @@
 import type { Command, CLI, GeneratedOptionMeta, RegisteredCommands, CommandOptions, GeneratedCommandMeta } from '@bunli/core'
 import { createGeneratedHelpers, registerGeneratedStore } from '@bunli/core'
 
+import Speedtest from '../src/commands/speedtest.js'
 import Test from '../src/commands/test.js'
 
 // Narrow list of command names to avoid typeof-cycles in types
-const names = ['test'] as const
+const names = ['speedtest', 'test'] as const
 type GeneratedNames = typeof names[number]
 
 const modules: Record<GeneratedNames, Command<any>> = {
+  'speedtest': Speedtest,
   'test': Test
 } as const
 
 const metadata: Record<GeneratedNames, GeneratedCommandMeta> = {
+  'speedtest': {
+      name: 'speedtest',
+      description: 'Speed tests TorBox CDNs using test files from the TorBox API.',
+      options: {
+        'count': { type: 'z.coerce.number.int.min.default', required: true, hasDefault: true, default: 1, description: 'Number of CDNs to test, closest first', short: 'n', min: 1, minLength: 1, schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"NumericLiteral","start":2627,"end":2628,"loc":{"start":{"line":89,"column":57,"index":2627},"end":{"line":89,"column":58,"index":2628}},"extra":{"rawValue":1,"raw":"1"},"value":1}}]}, validator: '(val) => true' },
+        'all': { type: 'z.boolean.default', required: true, hasDefault: true, default: false, description: 'Test every returned CDN', short: 'a', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":2755,"end":2760,"loc":{"start":{"line":93,"column":36,"index":2755},"end":{"line":93,"column":41,"index":2760}},"value":false}}]}, validator: '(val) => true' },
+        'testLength': { type: 'z.enum.default', required: true, hasDefault: true, default: "short", description: 'Size of the speedtest file: short or long', short: 't', enumValues: ["short","long"], schema: {"type":"zod","method":"default","args":[{"type":"literal","value":"short"}]}, validator: '(val) => true' },
+        'region': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Only test CDNs in this region (see --list-regions)', short: 'r', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
+        'userIp': { type: 'z.string.optional', required: false, hasDefault: false, description: 'IP used to determine the closest server (defaults to the calling IP)', short: 'u', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
+        'connections': { type: 'z.coerce.number.int.min.default', required: true, hasDefault: true, default: 1, description: 'Connections used for each download', short: 'c', min: 1, minLength: 1, schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"NumericLiteral","start":3391,"end":3392,"loc":{"start":{"line":110,"column":63,"index":3391},"end":{"line":110,"column":64,"index":3392}},"extra":{"rawValue":1,"raw":"1"},"value":1}}]}, validator: '(val) => true' },
+        'listRegions': { type: 'z.boolean.default', required: true, hasDefault: true, default: false, description: 'List the available regions and exit without testing', short: 'R', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":3524,"end":3529,"loc":{"start":{"line":114,"column":44,"index":3524},"end":{"line":114,"column":49,"index":3529}},"value":false}}]}, validator: '(val) => true' }
+      },
+      path: './src/commands/speedtest'
+    },
   'test': {
       name: 'test',
       description: 'Tests a video link and simulates start, seek and buffering.',
       options: {
         'link': { type: 'z.url.optional', required: false, hasDefault: false, description: 'Link to test', short: 'l', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
-        'skipTimings': { type: 'z.boolean.default', required: true, hasDefault: true, default: false, description: 'Skip network timing measurements', short: 'T', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":1996,"end":2001,"loc":{"start":{"line":69,"column":44,"index":1996},"end":{"line":69,"column":49,"index":2001}},"value":false}}]}, validator: '(val) => true' },
-        'skipSeek': { type: 'z.boolean.default', required: true, hasDefault: true, default: false, description: 'Skip random seek tests', short: 'S', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":2156,"end":2161,"loc":{"start":{"line":74,"column":41,"index":2156},"end":{"line":74,"column":46,"index":2161}},"value":false}}]}, validator: '(val) => true' },
-        'skipDownload': { type: 'z.boolean.default', required: true, hasDefault: true, default: false, description: 'Skip single- and multi-connection download tests', short: 'D', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":2310,"end":2315,"loc":{"start":{"line":79,"column":45,"index":2310},"end":{"line":79,"column":50,"index":2315}},"value":false}}]}, validator: '(val) => true' }
+        'file': { type: 'z.string.optional', required: false, hasDefault: false, description: 'Path to a text file with one link per line', short: 'f', schema: {"type":"zod","method":"optional","args":[]}, validator: '(val) => true' },
+        'skipTimings': { type: 'z.boolean.default', required: true, hasDefault: true, default: false, description: 'Skip network timing measurements', short: 'T', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":5128,"end":5133,"loc":{"start":{"line":181,"column":44,"index":5128},"end":{"line":181,"column":49,"index":5133}},"value":false}}]}, validator: '(val) => true' },
+        'skipSeek': { type: 'z.boolean.default', required: true, hasDefault: true, default: false, description: 'Skip random seek tests', short: 'S', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":5288,"end":5293,"loc":{"start":{"line":186,"column":41,"index":5288},"end":{"line":186,"column":46,"index":5293}},"value":false}}]}, validator: '(val) => true' },
+        'skipDownload': { type: 'z.boolean.default', required: true, hasDefault: true, default: false, description: 'Skip single- and multi-connection download tests', short: 'D', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":5442,"end":5447,"loc":{"start":{"line":191,"column":45,"index":5442},"end":{"line":191,"column":50,"index":5447}},"value":false}}]}, validator: '(val) => true' },
+        'skipPastebin': { type: 'z.boolean.default', required: true, hasDefault: true, default: false, description: 'Skip uploading results to PrivateBin', short: 'P', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":5622,"end":5627,"loc":{"start":{"line":196,"column":45,"index":5622},"end":{"line":196,"column":50,"index":5627}},"value":false}}]}, validator: '(val) => true' },
+        'noBlur': { type: 'z.boolean.default', required: true, hasDefault: true, default: false, description: 'Show the full file name instead of blurring it', short: 'B', fileType: 'file', schema: {"type":"zod","method":"default","args":[{"type":"unknown","raw":{"type":"BooleanLiteral","start":5784,"end":5789,"loc":{"start":{"line":201,"column":39,"index":5784},"end":{"line":201,"column":44,"index":5789}},"value":false}}]}, validator: '(val) => true' }
       },
       path: './src/commands/test'
     }

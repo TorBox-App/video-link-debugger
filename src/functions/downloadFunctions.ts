@@ -167,21 +167,37 @@ export interface DownloadProgress {
     bytesPerSecond: number;
 }
 
+const CONNECT_TIMEOUT_MS = 10_000;
+const STALL_TIMEOUT_MS = 15_000;
+
 async function downloadOnce(
     link: string,
     range: { start: number; end: number } | undefined,
     onBytes: (delta: number) => void,
     onChunk?: (chunk: Buffer) => void,
+    signal?: AbortSignal,
 ): Promise<{ statusCode: number | null; bytes: number }> {
     const url = new URL(link);
     const isHttps = url.protocol === "https:";
     const port = Number(url.port) || (isHttps ? 443 : 80);
 
+    if (signal?.aborted) throw new Error("download aborted");
+
     const { address } = await dns.lookup(url.hostname);
     const tcpSocket = await new Promise<net.Socket>((resolve, reject) => {
         const s = net.connect({ host: address, port });
-        s.once("connect", () => resolve(s));
-        s.once("error", reject);
+        const timer = setTimeout(() => {
+            s.destroy();
+            reject(new Error(`TCP connect timed out after ${CONNECT_TIMEOUT_MS / 1000}s`));
+        }, CONNECT_TIMEOUT_MS);
+        s.once("connect", () => {
+            clearTimeout(timer);
+            resolve(s);
+        });
+        s.once("error", (err) => {
+            clearTimeout(timer);
+            reject(err);
+        });
     });
 
     let socket: net.Socket | tls.TLSSocket = tcpSocket;
@@ -192,8 +208,18 @@ async function downloadOnce(
                 servername: url.hostname,
                 ALPNProtocols: ["http/1.1"],
             });
-            t.once("secureConnect", () => resolve(t));
-            t.once("error", reject);
+            const timer = setTimeout(() => {
+                t.destroy();
+                reject(new Error(`TLS handshake timed out after ${CONNECT_TIMEOUT_MS / 1000}s`));
+            }, CONNECT_TIMEOUT_MS);
+            t.once("secureConnect", () => {
+                clearTimeout(timer);
+                resolve(t);
+            });
+            t.once("error", (err) => {
+                clearTimeout(timer);
+                reject(err);
+            });
         });
     }
 
@@ -215,8 +241,48 @@ async function downloadOnce(
         let headersDone = false;
         let headerBuf = Buffer.alloc(0);
         let bytes = 0;
+        // Body size promised by the response; lets us finish without waiting
+        // for a server close, and detect hangs via the stall watchdog.
+        let expected: number | null = null;
+        let settled = false;
+        let stallTimer: ReturnType<typeof setTimeout> | undefined;
+
+        const finish = (fn: () => void) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(stallTimer);
+            signal?.removeEventListener("abort", onAbort);
+            socket.destroy();
+            fn();
+        };
+        const fail = (err: Error) => finish(() => reject(err));
+        const onAbort = () => fail(new Error("download aborted"));
+        const resetStall = () => {
+            clearTimeout(stallTimer);
+            stallTimer = setTimeout(
+                () => fail(new Error(`stalled: no data received for ${STALL_TIMEOUT_MS / 1000}s`)),
+                STALL_TIMEOUT_MS,
+            );
+        };
+        const checkComplete = () => {
+            if (expected !== null && bytes >= expected) {
+                finish(() => resolve({ statusCode, bytes }));
+            }
+        };
+
+        signal?.addEventListener("abort", onAbort);
+        resetStall();
+
+        const addBody = (chunk: Buffer) => {
+            bytes += chunk.length;
+            onBytes(chunk.length);
+            onChunk?.(chunk);
+            checkComplete();
+        };
 
         socket.on("data", (chunk: Buffer) => {
+            if (settled) return;
+            resetStall();
             if (!headersDone) {
                 headerBuf = Buffer.concat([headerBuf, chunk]);
                 const eoh = headerBuf.indexOf("\r\n\r\n");
@@ -225,25 +291,26 @@ async function downloadOnce(
                     const statusLine = head.split("\r\n", 1)[0] ?? "";
                     const match = statusLine.match(/^HTTP\/1\.\d (\d+)/);
                     if (match) statusCode = Number(match[1]);
+                    const clMatch = head.match(/^content-length:\s*(\d+)\s*$/im);
+                    if (clMatch) {
+                        expected = Number(clMatch[1]);
+                    } else if (range && statusCode === 206) {
+                        expected = range.end - range.start + 1;
+                    }
                     headersDone = true;
                     const bodyStart = eoh + 4;
-                    if (bodyStart < headerBuf.length) {
-                        const bodyChunk = headerBuf.subarray(bodyStart);
-                        bytes += bodyChunk.length;
-                        onBytes(bodyChunk.length);
-                        onChunk?.(bodyChunk);
-                    }
+                    const bodyChunk = headerBuf.subarray(bodyStart);
                     headerBuf = Buffer.alloc(0);
+                    if (bodyChunk.length > 0) addBody(bodyChunk);
+                    else checkComplete();
                 }
             } else {
-                bytes += chunk.length;
-                onBytes(chunk.length);
-                onChunk?.(chunk);
+                addBody(chunk);
             }
         });
 
-        socket.once("end", () => resolve({ statusCode, bytes }));
-        socket.once("error", reject);
+        socket.once("end", () => finish(() => resolve({ statusCode, bytes })));
+        socket.once("error", (err) => fail(err));
     });
 }
 
@@ -253,6 +320,7 @@ export async function downloadFull(
         connections?: number;
         size?: number;
         onProgress?: (state: DownloadProgress) => void;
+        onError?: (message: string) => void;
     } = {},
 ): Promise<DownloadResult | null> {
     const connections = Math.max(1, options.connections ?? 1);
@@ -298,19 +366,39 @@ export async function downloadFull(
                 const positions = ranges.map((r) => r.start);
                 const writeChains: Promise<void>[] = ranges.map(() => Promise.resolve());
                 let writeError: unknown = null;
-                const results = await Promise.all(
+                // On the first failure abort the sibling connections so one
+                // stalled range fails the download instead of hanging it.
+                const controller = new AbortController();
+                let rootError: unknown = null;
+                const settled = await Promise.allSettled(
                     ranges.map((r, i) =>
-                        downloadOnce(link, r, onBytes, (chunk) => {
-                            const pos = positions[i]!;
-                            positions[i] = pos + chunk.length;
-                            writeChains[i] = writeChains[i]!
-                                .then(() => file.write(chunk, 0, chunk.length, pos))
-                                .then(() => {}, (err) => { writeError ??= err; });
+                        downloadOnce(
+                            link,
+                            r,
+                            onBytes,
+                            (chunk) => {
+                                const pos = positions[i]!;
+                                positions[i] = pos + chunk.length;
+                                writeChains[i] = writeChains[i]!
+                                    .then(() => file.write(chunk, 0, chunk.length, pos))
+                                    .then(() => {}, (err) => { writeError ??= err; });
+                            },
+                            controller.signal,
+                        ).catch((err) => {
+                            rootError ??= err;
+                            controller.abort();
+                            throw err;
                         }),
                     ),
                 );
                 await Promise.all(writeChains);
+                if (rootError) throw rootError;
                 if (writeError) throw writeError;
+                const results = settled.map(
+                    (s) =>
+                        (s as PromiseFulfilledResult<{ statusCode: number | null; bytes: number }>)
+                            .value,
+                );
                 statusCode = results[0]?.statusCode ?? null;
                 end = performance.now();
 
@@ -339,7 +427,8 @@ export async function downloadFull(
         }
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error(`Download error: ${message}`);
+        if (options.onError) options.onError(message);
+        else console.error(`Download error: ${message}`);
         return null;
     }
 

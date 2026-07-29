@@ -114,6 +114,33 @@ video-link-debugger test https://example.com/video.mp4 -T -S        # only downl
 
 > Short flags can't be bundled — write `-T -S`, not `-TS`.
 
+### `speedtest`
+
+Speed tests TorBox CDNs using test files from the [TorBox API](https://api-docs.torbox.app/). By default it tests only the closest CDN. Each CDN's test file is downloaded twice — once over a single connection and once over 4 connections (configurable with `--connections`) — and both speeds are reported. The results table is a leaderboard sorted by the best achieved speed, with the closest CDN marked `*`. When more than one CDN is tested, the fastest one is highlighted in green.
+
+```bash
+video-link-debugger speedtest                    # closest CDN, short test file
+video-link-debugger speedtest -n 5               # top 5 CDNs, closest first
+video-link-debugger speedtest --all              # every CDN
+video-link-debugger speedtest -n 3 -c 8          # top 3, multi pass with 8 connections
+video-link-debugger speedtest -c 1               # single-connection pass only
+video-link-debugger speedtest -r weur            # only the weur region
+video-link-debugger speedtest --test-length long # bigger test file
+video-link-debugger speedtest --list-regions     # show available regions and exit
+```
+
+#### `speedtest` flags
+
+| Flag | Short | Meaning |
+| --- | --- | --- |
+| `--count <n>` | `-n` | Number of CDNs to test, closest first (default: 1) |
+| `--all` | `-a` | Test every returned CDN |
+| `--connections <n>` | `-c` | Connections for the multi-connection download; 1 disables it (default: 4) |
+| `--test-length <short\|long>` | `-t` | Size of the speedtest file (default: `short`) |
+| `--region <region>` | `-r` | Only test CDNs in this region (see `--list-regions`) |
+| `--user-ip <ip>` | `-u` | IP used to determine the closest server (default: the calling IP) |
+| `--list-regions` | `-R` | List the available regions and exit without testing |
+
 ## Development
 
 ```bash
