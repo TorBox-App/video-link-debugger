@@ -1,7 +1,36 @@
 # Video Link Debugger
 
-
 ## Install
+
+### Quick install (one command)
+
+**Linux / macOS** (also works in Git Bash or WSL on Windows):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TorBox-App/video-link-debugger/main/install.sh | bash
+```
+
+**Windows** (PowerShell):
+
+```powershell
+powershell -c "irm https://raw.githubusercontent.com/TorBox-App/video-link-debugger/main/install.ps1 | iex"
+```
+
+The script detects your OS and CPU, downloads the right binary from the latest release, clears the OS security quarantine, and installs it to `~/.local/bin` (Linux/macOS) or `%LOCALAPPDATA%\video-link-debugger` (Windows).
+
+You can also install and immediately run a test in one command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TorBox-App/video-link-debugger/main/install.sh | bash -s -- test https://example.com/video.mp4
+```
+
+To pin a version or change the install location, set `VERSION` and/or `INSTALL_DIR`:
+
+```bash
+VERSION=v1.1.0 INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/TorBox-App/video-link-debugger/main/install.sh | bash
+```
+
+### Manual install
 
 Pre-built binaries are published to the [Releases page](https://github.com/TorBox-App/video-link-debugger/releases) for every push. Pick the file matching your OS and CPU:
 
@@ -14,9 +43,9 @@ Pre-built binaries are published to the [Releases page](https://github.com/TorBo
 | Windows x64 | `video-link-debugger-windows-x64.exe` |
 | Windows ARM64 | `video-link-debugger-windows-arm64.exe` |
 
-The binaries are unsigned, so the first time you run one you'll see a security warning. The one-time fix per platform:
+The binaries are unsigned, so when downloaded manually (via a browser) the first run triggers a security warning. The install script handles this for you; for manual downloads, the one-time fix per platform:
 
-### macOS
+#### macOS
 
 If you see **"video-link-debugger-darwin-arm64 is damaged and can't be opened"**, that's macOS Gatekeeper rejecting the binary because it's unsigned. Run this once to remove the quarantine flag:
 
@@ -26,13 +55,13 @@ chmod +x ~/Downloads/video-link-debugger-darwin-arm64
 ./video-link-debugger-darwin-arm64
 ```
 
-### Windows
+#### Windows
 
 If SmartScreen says **"Windows protected your PC"**, click **More info** → **Run anyway**.
 
 You can also right-click the `.exe` → Properties → check **Unblock** → OK before launching.
 
-### Linux
+#### Linux
 
 No security prompts. Just make it executable:
 
