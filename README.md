@@ -95,6 +95,8 @@ By default `test` runs every phase. Pass any of these to skip a phase:
 
 Link information is always printed.
 
+The file name is blurred by default, keeping only the first character and the extension (`movie.mp4` → `m****.mp4`) — both in the terminal output and in the uploaded PrivateBin results. Pass `--no-blur` (`-B`) to show it in full.
+
 ```bash
 video-link-debugger test https://example.com/video.mp4              # everything
 video-link-debugger test https://example.com/video.mp4 -D           # no downloads

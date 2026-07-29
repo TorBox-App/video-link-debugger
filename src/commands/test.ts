@@ -6,7 +6,7 @@ import {
   TextRenderable,
   type CliRenderer,
 } from "@opentui/core";
-import { getLinkInformation } from "../functions/linkValidation";
+import { getLinkInformation, blurFileName } from "../functions/linkValidation";
 import {
   getLinkTimings,
   type TimingPhase,
@@ -94,12 +94,20 @@ export default defineCommand({
       short: "P",
       argumentKind: "flag",
     }),
+    noBlur: option(z.boolean().default(false), {
+      description: "Show the full file name instead of blurring it",
+      short: "B",
+      argumentKind: "flag",
+    }),
   },
   handler: async ({ flags, positional }) => {
     const link = z.url().parse(positional[0] ?? flags.link);
     const { skipTimings, skipSeek, skipDownload, skipPastebin } = flags;
 
     const linkInfo = await getLinkInformation(link);
+    if (!flags.noBlur && linkInfo.fileName) {
+      linkInfo.fileName = blurFileName(linkInfo.fileName);
+    }
 
     const needsRenderer = !skipTimings || !skipDownload;
     const renderer = needsRenderer

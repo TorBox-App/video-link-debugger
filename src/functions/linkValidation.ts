@@ -95,6 +95,15 @@ function sanitizeFilename(name: string): string {
     return name.replace(/[\\/]/g, "_").trim() || "unknown";
 }
 
+// Masks all but the first character and the extension: "movie.mp4" -> "m****.mp4".
+export function blurFileName(name: string): string {
+    const dot = name.lastIndexOf(".");
+    const base = dot > 0 ? name.slice(0, dot) : name;
+    const ext = dot > 0 ? name.slice(dot) : "";
+    if (base.length <= 1) return base + ext;
+    return base[0] + "*".repeat(base.length - 1) + ext;
+}
+
 async function linkAcceptsRanges(headers: Headers): Promise<boolean> {
     return headers.get("Accept-Ranges") === "bytes";
 }

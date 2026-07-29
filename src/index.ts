@@ -11,4 +11,15 @@ const cli = await createCLI({
 
 cli.command(testCommand);
 
-await cli.run();
+// Bunli only matches the camelCase option names (--skipTimings); accept the
+// conventional kebab-case spelling (--skip-timings) too.
+const argv = process.argv.slice(2).map((arg) => {
+  if (!arg.startsWith("--")) return arg;
+  const eq = arg.indexOf("=");
+  const name = eq === -1 ? arg.slice(2) : arg.slice(2, eq);
+  const rest = eq === -1 ? "" : arg.slice(eq);
+  return "--" + name.replace(/-([a-z0-9])/gi, (_, c: string) => c.toUpperCase()) + rest;
+});
+
+await cli.run(argv);
+
