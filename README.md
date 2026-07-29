@@ -84,14 +84,15 @@ video-link-debugger test --link https://example.com/video.mp4
 
 #### `test` flags
 
-By default `test` runs every phase. Pass any of these to skip a phase:
+By default `test` runs every phase. Pass any of these to disable a phase or behavior:
 
-| Flag | Short | Skips |
+| Flag | Short | Disables |
 | --- | --- | --- |
 | `--skip-timings` | `-T` | DNS / TCP / TLS / TTFB measurement and the **Network Timings** table |
 | `--skip-seek` | `-S` | Random seek probes and the **Seek Results** table |
 | `--skip-download` | `-D` | Single- and multi-connection downloads and the **Download Comparison** table |
 | `--skip-pastebin` | `-P` | Uploading results to PrivateBin and printing the **Results URL** |
+| `--no-blur` | `-B` | Blurring of the file name — shows it in full |
 
 Link information is always printed.
 

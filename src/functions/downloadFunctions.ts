@@ -2,6 +2,9 @@ import * as dns from "node:dns/promises";
 import * as net from "node:net";
 import * as tls from "node:tls";
 import { createHash } from "node:crypto";
+import { open, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { headers } from "../library/http";
 import { LinkInformation } from "./linkValidation";
 
@@ -275,6 +278,7 @@ export async function downloadFull(
 
     let statusCode: number | null = null;
     let md5: string | null = null;
+    let end = start;
 
     try {
         if (useMulti) {
@@ -285,15 +289,45 @@ export async function downloadFull(
                 const e = Math.floor((size * (i + 1)) / connections) - 1;
                 ranges.push({ start: s, end: e });
             }
-            const hashers = ranges.map(() => createHash("md5"));
-            const results = await Promise.all(
-                ranges.map((r, i) =>
-                    downloadOnce(link, r, onBytes, (chunk) => hashers[i]!.update(chunk)),
-                ),
-            );
-            statusCode = results[0]?.statusCode ?? null;
-            const joined = hashers.map((h) => h.digest("hex")).join("");
-            md5 = createHash("md5").update(joined).digest("hex");
+            // Spool each range to its real offset in a temp file, then hash the
+            // file sequentially so the MD5 is the actual file hash, comparable
+            // to the single-connection value.
+            const tmpPath = join(tmpdir(), `video-link-debugger-${crypto.randomUUID()}`);
+            const file = await open(tmpPath, "w+");
+            try {
+                const positions = ranges.map((r) => r.start);
+                const writeChains: Promise<void>[] = ranges.map(() => Promise.resolve());
+                let writeError: unknown = null;
+                const results = await Promise.all(
+                    ranges.map((r, i) =>
+                        downloadOnce(link, r, onBytes, (chunk) => {
+                            const pos = positions[i]!;
+                            positions[i] = pos + chunk.length;
+                            writeChains[i] = writeChains[i]!
+                                .then(() => file.write(chunk, 0, chunk.length, pos))
+                                .then(() => {}, (err) => { writeError ??= err; });
+                        }),
+                    ),
+                );
+                await Promise.all(writeChains);
+                if (writeError) throw writeError;
+                statusCode = results[0]?.statusCode ?? null;
+                end = performance.now();
+
+                const hasher = createHash("md5");
+                const buf = Buffer.alloc(8 * 1024 * 1024);
+                let readPos = 0;
+                while (true) {
+                    const { bytesRead } = await file.read(buf, 0, buf.length, readPos);
+                    if (bytesRead === 0) break;
+                    hasher.update(buf.subarray(0, bytesRead));
+                    readPos += bytesRead;
+                }
+                md5 = hasher.digest("hex");
+            } finally {
+                await file.close();
+                await unlink(tmpPath).catch(() => {});
+            }
         } else {
             const hasher = createHash("md5");
             const result = await downloadOnce(link, undefined, onBytes, (chunk) =>
@@ -301,6 +335,7 @@ export async function downloadFull(
             );
             statusCode = result.statusCode;
             md5 = hasher.digest("hex");
+            end = performance.now();
         }
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -308,7 +343,7 @@ export async function downloadFull(
         return null;
     }
 
-    const durationMs = performance.now() - start;
+    const durationMs = end - start;
     return {
         bytes,
         durationMs,
