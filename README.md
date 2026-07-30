@@ -120,6 +120,8 @@ Speed tests TorBox CDNs using test files from the [TorBox API](https://api-docs.
 
 Before testing starts (and with `--list-regions`), a world map is drawn in the terminal showing where the CDNs are located, with a numbered marker and legend entry per location and the closest CDN highlighted. The map needs a terminal at least 74 columns wide and is skipped otherwise.
 
+Like `test`, the results are uploaded to PrivateBin and a **Results URL** is printed after the leaderboard; pass `--skip-pastebin` (`-P`) to disable that.
+
 ```bash
 video-link-debugger speedtest                    # closest CDN, short test file
 video-link-debugger speedtest -n 5               # top 5 CDNs, closest first
@@ -144,6 +146,7 @@ video-link-debugger speedtest --map-only         # show the CDN map and exit
 | `--user-ip <ip>` | `-u` | IP used to determine the closest server (default: the calling IP) |
 | `--list-regions` | `-R` | List the available regions and exit without testing |
 | `--map-only` | `-M` | Show the CDN location map and exit without testing (respects `--region`) |
+| `--skip-pastebin` | `-P` | Skip uploading results to PrivateBin and printing the **Results URL** |
 
 ## Development
 

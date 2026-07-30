@@ -18,6 +18,7 @@ import {
 } from "../library/tables";
 import { makeProgressBar } from "../library/progress";
 import { renderCdnMap } from "../library/map";
+import { sendResultsToPrivatebin } from "../functions/privatebinFunctions";
 
 const SPEEDTEST_API = "https://api.torbox.app/v1/api/speedtest";
 
@@ -142,6 +143,11 @@ export default defineCommand({
       short: "M",
       argumentKind: "flag",
     }),
+    skipPastebin: option(z.boolean().default(false), {
+      description: "Skip uploading results to PrivateBin",
+      short: "P",
+      argumentKind: "flag",
+    }),
   },
   handler: async ({ flags }) => {
     let files: SpeedtestFile[];
@@ -234,6 +240,28 @@ export default defineCommand({
     // Leaderboard: best achieved speed first, failed CDNs last.
     results.sort((a, b) => bestSpeed(b) - bestSpeed(a));
 
+    let resultsUrl: string | null = null;
+    if (!flags.skipPastebin) {
+      try {
+        resultsUrl = await sendResultsToPrivatebin({
+          testLength: flags.testLength,
+          connections: doMulti ? flags.connections : 1,
+          results: results.map(({ cdn, timings, single, multi }) => ({
+            region: cdn.region,
+            name: cdn.name,
+            domain: cdn.domain,
+            closest: cdn.closest,
+            coordinates: cdn.coordinates,
+            timings,
+            single,
+            multi,
+          })),
+        });
+      } catch (err) {
+        console.error(`PrivateBin upload failed: ${(err as Error).message}`);
+      }
+    }
+
     // After the sort the fastest CDN is first; only highlight it when there is
     // a successful download and something to compare it against.
     const bestIndex =
@@ -258,6 +286,9 @@ export default defineCommand({
     }
     if (bestIndex !== -1) {
       console.log(highlight("fastest CDN"));
+    }
+    if (resultsUrl) {
+      console.log(`Results URL: ${resultsUrl}`);
     }
   },
 });
