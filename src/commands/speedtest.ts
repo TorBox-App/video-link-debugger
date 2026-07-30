@@ -109,6 +109,10 @@ export default defineCommand({
       short: "P",
       argumentKind: "flag",
     }),
+    chunkSize: option(z.coerce.number().int().min(1).default(2048), {
+      description: "Bytes fetched by the network-timing probe",
+      short: "C",
+    }),
   },
   handler: async ({ flags }) => {
     let files: SpeedtestFile[];
@@ -166,7 +170,10 @@ export default defineCommand({
     const results: CdnResult[] = [];
     for (const cdn of selected) {
       const info = await getLinkInformation(cdn.url);
-      const timings = await getLinkTimings(cdn.url);
+      const timings = await getLinkTimings(cdn.url, {
+        start: 0,
+        end: flags.chunkSize,
+      });
 
       const singleBar = makeProgressBar(
         `${cdn.region} — ${cdn.name} (single connection)`,

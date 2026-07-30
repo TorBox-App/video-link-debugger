@@ -127,8 +127,12 @@ export async function getLinkTimings(
     }
 }
 
-async function getLinkTimingsSeek(link: string, seekTo: number): Promise<LinkTimings | null> {
-    return getLinkTimings(link, { start: seekTo, end: seekTo + 2048 });
+async function getLinkTimingsSeek(
+    link: string,
+    seekTo: number,
+    chunkSize: number,
+): Promise<LinkTimings | null> {
+    return getLinkTimings(link, { start: seekTo, end: seekTo + chunkSize });
 }
 
 async function getRandomSeekPosition(linkInfo: LinkInformation): Promise<number> {
@@ -141,12 +145,17 @@ async function getRandomSeekPosition(linkInfo: LinkInformation): Promise<number>
     }
 }
 
-export async function SeekRandomMultipleTimes(linkInfo: LinkInformation, link: string, times: number): Promise<LinkTimings[]> {
+export async function SeekRandomMultipleTimes(
+    linkInfo: LinkInformation,
+    link: string,
+    times: number,
+    chunkSize = 2048,
+): Promise<LinkTimings[]> {
     const results: LinkTimings[] = [];
     for (let i = 0; i < times; i++) {
         // pick random seek position within the file size if known, otherwise within 1GB
         const seekTo = await getRandomSeekPosition(linkInfo);
-        const timings = await getLinkTimingsSeek(link, seekTo);
+        const timings = await getLinkTimingsSeek(link, seekTo, chunkSize);
         if (timings) results.push(timings);
     }
     return results;

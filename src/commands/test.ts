@@ -28,6 +28,7 @@ type TestFlags = {
   skipDownload: boolean;
   skipPastebin: boolean;
   noBlur: boolean;
+  chunkSize: number;
 };
 
 type LinkOutcome = {
@@ -63,10 +64,14 @@ async function runLinkTest(link: string, flags: TestFlags): Promise<LinkOutcome>
         { force },
       );
     render(true);
-    const linkTimings = await getLinkTimings(link, undefined, (phase, ms) => {
-      results.set(phase, ms);
-      render();
-    });
+    const linkTimings = await getLinkTimings(
+      link,
+      { start: 0, end: flags.chunkSize },
+      (phase, ms) => {
+        results.set(phase, ms);
+        render();
+      },
+    );
     latencyMs = linkTimings?.tcp ?? null;
     box.finish(
       results.size > 0
@@ -79,7 +84,7 @@ async function runLinkTest(link: string, flags: TestFlags): Promise<LinkOutcome>
 
   const seekResults = skipSeek
     ? null
-    : await SeekRandomMultipleTimes(linkInfo, link, 5);
+    : await SeekRandomMultipleTimes(linkInfo, link, 5, flags.chunkSize);
 
   let singleResult: DownloadResult | null = null;
   let multiResult: DownloadResult | null = null;
@@ -174,6 +179,10 @@ export default defineCommand({
       description: "Show the full file name instead of blurring it",
       short: "B",
       argumentKind: "flag",
+    }),
+    chunkSize: option(z.coerce.number().int().min(1).default(2048), {
+      description: "Bytes fetched by the timing and seek probes",
+      short: "C",
     }),
   },
   handler: async ({ flags, positional }) => {

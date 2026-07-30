@@ -114,6 +114,8 @@ Link information is always printed.
 
 The file name is blurred by default, keeping only the first character and the extension (`movie.mp4` → `m****.mp4`) — both in the terminal output and in the uploaded PrivateBin results. Pass `--no-blur` (`-B`) to show it in full.
 
+The timing and seek probes fetch 2048 bytes by default; change that with `--chunk-size <n>` (`-C`), e.g. `-C 65536` to probe with 64 KB requests.
+
 ```bash
 video-link-debugger test https://example.com/video.mp4              # everything
 video-link-debugger test https://example.com/video.mp4 -D           # no downloads
@@ -155,6 +157,7 @@ video-link-debugger speedtest --map-only         # show the CDN map and exit
 | `--list-regions` | `-R` | List the available regions and exit without testing |
 | `--map-only` | `-M` | Show the CDN location map and exit without testing (respects `--region`) |
 | `--skip-pastebin` | `-P` | Skip uploading results to PrivateBin and printing the **Results URL** |
+| `--chunk-size <n>` | `-C` | Bytes fetched by the network-timing probe (default: 2048) |
 
 ## Development
 
