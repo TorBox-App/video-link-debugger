@@ -8,14 +8,12 @@ import {
   type DownloadResult,
   type LinkTimings,
 } from "../functions/downloadFunctions";
+import { renderMultiTable } from "../library/tables";
 import {
-  renderMultiTable,
-  formatBytes,
-  formatSpeed,
-  formatDuration,
-  highlight,
-  type TableRow,
-} from "../library/tables";
+  bestSpeed,
+  printSpeedtestResults,
+  type SpeedtestEntry,
+} from "../library/results";
 import { makeProgressBar } from "../library/progress";
 import { renderCdnMap } from "../library/map";
 import { sendResultsToPrivatebin } from "../functions/privatebinFunctions";
@@ -66,43 +64,6 @@ type CdnResult = {
   single: DownloadResult | null;
   multi: DownloadResult | null;
 };
-
-function bestSpeed(r: CdnResult): number {
-  return Math.max(
-    r.single?.avgBytesPerSecond ?? -1,
-    r.multi?.avgBytesPerSecond ?? -1,
-  );
-}
-
-function speedtestRows(
-  results: CdnResult[],
-  doMulti: boolean,
-  bestIndex = -1,
-): TableRow[] {
-  const fmt = (n: number | null | undefined) =>
-    n === null || n === undefined ? "—" : `${n.toFixed(2)} ms`;
-  return results.map(({ cdn, timings, single, multi }, i) => {
-    const sized = single ?? multi;
-    const row = [
-      cdn.closest ? `${cdn.region} *` : cdn.region,
-      cdn.name,
-      fmt(timings?.tcp),
-      fmt(timings?.wait),
-      sized ? formatBytes(sized.bytes) : "—",
-      single
-        ? `${formatSpeed(single.avgBytesPerSecond)} (${formatDuration(single.durationMs)})`
-        : "—",
-      ...(doMulti
-        ? [
-            multi
-              ? `${formatSpeed(multi.avgBytesPerSecond)} (${formatDuration(multi.durationMs)})`
-              : "—",
-          ]
-        : []),
-    ];
-    return i === bestIndex ? row.map(highlight) : row;
-  });
-}
 
 export default defineCommand({
   name: "speedtest" as const,
@@ -237,56 +198,35 @@ export default defineCommand({
       results.push({ cdn, timings, single, multi });
     }
 
-    // Leaderboard: best achieved speed first, failed CDNs last.
-    results.sort((a, b) => bestSpeed(b) - bestSpeed(a));
+    const entries: SpeedtestEntry[] = results.map(
+      ({ cdn, timings, single, multi }) => ({
+        region: cdn.region,
+        name: cdn.name,
+        domain: cdn.domain,
+        closest: cdn.closest,
+        coordinates: cdn.coordinates,
+        timings,
+        single,
+        multi,
+      }),
+    );
+    entries.sort((a, b) => bestSpeed(b) - bestSpeed(a));
+    const payload = {
+      testLength: flags.testLength,
+      connections: doMulti ? flags.connections : 1,
+      results: entries,
+    };
 
     let resultsUrl: string | null = null;
     if (!flags.skipPastebin) {
       try {
-        resultsUrl = await sendResultsToPrivatebin({
-          testLength: flags.testLength,
-          connections: doMulti ? flags.connections : 1,
-          results: results.map(({ cdn, timings, single, multi }) => ({
-            region: cdn.region,
-            name: cdn.name,
-            domain: cdn.domain,
-            closest: cdn.closest,
-            coordinates: cdn.coordinates,
-            timings,
-            single,
-            multi,
-          })),
-        });
+        resultsUrl = await sendResultsToPrivatebin(payload);
       } catch (err) {
         console.error(`PrivateBin upload failed: ${(err as Error).message}`);
       }
     }
 
-    // After the sort the fastest CDN is first; only highlight it when there is
-    // a successful download and something to compare it against.
-    const bestIndex =
-      results.length > 1 && (results[0]?.single || results[0]?.multi) ? 0 : -1;
-    console.log(
-      renderMultiTable(
-        "Speedtest Results",
-        [
-          "Region",
-          "Name",
-          "Latency",
-          "TTFB",
-          "Size",
-          "Single",
-          ...(doMulti ? [`Multi (${flags.connections}x)`] : []),
-        ],
-        speedtestRows(results, doMulti, bestIndex),
-      ),
-    );
-    if (results.some((r) => r.cdn.closest)) {
-      console.log("* closest CDN");
-    }
-    if (bestIndex !== -1) {
-      console.log(highlight("fastest CDN"));
-    }
+    printSpeedtestResults(payload);
     if (resultsUrl) {
       console.log(`Results URL: ${resultsUrl}`);
     }

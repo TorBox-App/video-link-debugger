@@ -3,6 +3,7 @@ import { createCLI } from "@bunli/core";
 
 import testCommand from "./commands/test";
 import speedtestCommand from "./commands/speedtest";
+import viewCommand from "./commands/view";
 
 const cli = await createCLI({
   name: "video-link-debugger",
@@ -12,6 +13,7 @@ const cli = await createCLI({
 
 cli.command(testCommand);
 cli.command(speedtestCommand);
+cli.command(viewCommand);
 
 // Bunli only matches the camelCase option names (--skipTimings); accept the
 // conventional kebab-case spelling (--skip-timings) too.

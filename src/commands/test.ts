@@ -13,17 +13,11 @@ import {
   SeekRandomMultipleTimes,
   downloadFull,
 } from "../functions/downloadFunctions";
+import { PHASES, computeSeekStats } from "../library/tables";
 import {
-  PHASES,
-  renderTable,
-  renderMultiTable,
-  linkInfoRows,
-  timingRows,
-  seekRows,
-  downloadRows,
-  seekStatsRows,
-  computeSeekStats,
-} from "../library/tables";
+  printTestResults,
+  type TestResultsPayload,
+} from "../library/results";
 import { sendResultsToPrivatebin } from "../functions/privatebinFunctions";
 
 const MULTI_CONNECTIONS = 4;
@@ -38,7 +32,7 @@ type TestFlags = {
 
 type LinkOutcome = {
   linkInfo: LinkInformation;
-  payload: Record<string, unknown>;
+  payload: TestResultsPayload;
   resultsUrl: string | null;
 };
 
@@ -117,7 +111,7 @@ async function runLinkTest(link: string, flags: TestFlags): Promise<LinkOutcome>
     }
   }
 
-  const payload: Record<string, unknown> = {
+  const payload: TestResultsPayload = {
     linkInfo,
     timings: !skipTimings
       ? { ...Object.fromEntries(results), latencyMs }
@@ -139,33 +133,7 @@ async function runLinkTest(link: string, flags: TestFlags): Promise<LinkOutcome>
     }
   }
 
-  console.log(renderTable("Link Information", linkInfoRows(linkInfo)));
-  if (!skipTimings) {
-    console.log(renderTable("Network Timings", timingRows(results, latencyMs)));
-  }
-  if (!skipSeek && seekResults) {
-    console.log(
-      renderMultiTable(
-        "Seek Results",
-        ["#", "Status", "TTFB", "Receive", "Total"],
-        [...seekRows(seekResults), ...seekStatsRows(seekResults)],
-      ),
-    );
-  }
-  if (!skipDownload) {
-    console.log(
-      renderMultiTable(
-        "Download Comparison",
-        ["Mode", "Conns", "Time", "Bytes", "Speed", "MD5"],
-        downloadRows([
-          { label: "Single", result: singleResult },
-          ...(canMulti
-            ? [{ label: `Multi`, result: multiResult }]
-            : []),
-        ]),
-      ),
-    );
-  }
+  printTestResults(payload);
   if (resultsUrl) {
     console.log(`Results URL: ${resultsUrl}`);
   }

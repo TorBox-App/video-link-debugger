@@ -170,11 +170,15 @@ export interface DownloadProgress {
 const CONNECT_TIMEOUT_MS = 10_000;
 const STALL_TIMEOUT_MS = 15_000;
 
+// Passed to onChunk so a slow consumer (e.g. disk writes) can pause the
+// socket instead of letting unread chunks pile up in memory.
+export type ChunkFlow = { pause: () => void; resume: () => void };
+
 async function downloadOnce(
     link: string,
     range: { start: number; end: number } | undefined,
     onBytes: (delta: number) => void,
-    onChunk?: (chunk: Buffer) => void,
+    onChunk?: (chunk: Buffer, flow: ChunkFlow) => void,
     signal?: AbortSignal,
 ): Promise<{ statusCode: number | null; bytes: number }> {
     const url = new URL(link);
@@ -257,12 +261,36 @@ async function downloadOnce(
         };
         const fail = (err: Error) => finish(() => reject(err));
         const onAbort = () => fail(new Error("download aborted"));
-        const resetStall = () => {
-            clearTimeout(stallTimer);
-            stallTimer = setTimeout(
-                () => fail(new Error(`stalled: no data received for ${STALL_TIMEOUT_MS / 1000}s`)),
-                STALL_TIMEOUT_MS,
-            );
+
+        // Self-arming watchdog: the data handler only stamps lastData (cheap at
+        // tens of thousands of chunks/s) and the timer re-arms itself for the
+        // remaining window. A pause from backpressure is not a network stall.
+        let lastData = Date.now();
+        let paused = false;
+        const armStall = (delay: number) => {
+            stallTimer = setTimeout(() => {
+                if (settled) return;
+                if (paused) return armStall(STALL_TIMEOUT_MS);
+                const idle = Date.now() - lastData;
+                if (idle >= STALL_TIMEOUT_MS) {
+                    fail(new Error(`stalled: no data received for ${STALL_TIMEOUT_MS / 1000}s`));
+                } else {
+                    armStall(STALL_TIMEOUT_MS - idle);
+                }
+            }, delay);
+        };
+        const flow: ChunkFlow = {
+            pause: () => {
+                if (settled || paused) return;
+                paused = true;
+                socket.pause();
+            },
+            resume: () => {
+                if (settled || !paused) return;
+                paused = false;
+                lastData = Date.now();
+                socket.resume();
+            },
         };
         const checkComplete = () => {
             if (expected !== null && bytes >= expected) {
@@ -271,18 +299,18 @@ async function downloadOnce(
         };
 
         signal?.addEventListener("abort", onAbort);
-        resetStall();
+        armStall(STALL_TIMEOUT_MS);
 
         const addBody = (chunk: Buffer) => {
             bytes += chunk.length;
             onBytes(chunk.length);
-            onChunk?.(chunk);
+            onChunk?.(chunk, flow);
             checkComplete();
         };
 
         socket.on("data", (chunk: Buffer) => {
             if (settled) return;
-            resetStall();
+            lastData = Date.now();
             if (!headersDone) {
                 headerBuf = Buffer.concat([headerBuf, chunk]);
                 const eoh = headerBuf.indexOf("\r\n\r\n");
@@ -365,6 +393,11 @@ export async function downloadFull(
             try {
                 const positions = ranges.map((r) => r.start);
                 const writeChains: Promise<void>[] = ranges.map(() => Promise.resolve());
+                // Cap how many received-but-unwritten bytes each connection may
+                // hold; past it the socket is paused until the disk catches up,
+                // so memory stays flat no matter how fast the network is.
+                const MAX_PENDING_BYTES = 16 * 1024 * 1024;
+                const pending = ranges.map(() => 0);
                 let writeError: unknown = null;
                 // On the first failure abort the sibling connections so one
                 // stalled range fails the download instead of hanging it.
@@ -376,12 +409,21 @@ export async function downloadFull(
                             link,
                             r,
                             onBytes,
-                            (chunk) => {
+                            (chunk, flow) => {
                                 const pos = positions[i]!;
                                 positions[i] = pos + chunk.length;
+                                pending[i]! += chunk.length;
+                                if (pending[i]! >= MAX_PENDING_BYTES) flow.pause();
+                                const written = () => {
+                                    pending[i]! -= chunk.length;
+                                    if (pending[i]! < MAX_PENDING_BYTES / 2) flow.resume();
+                                };
                                 writeChains[i] = writeChains[i]!
                                     .then(() => file.write(chunk, 0, chunk.length, pos))
-                                    .then(() => {}, (err) => { writeError ??= err; });
+                                    .then(written, (err) => {
+                                        writeError ??= err;
+                                        written();
+                                    });
                             },
                             controller.signal,
                         ).catch((err) => {

@@ -6,6 +6,7 @@
       "dependencies": {
         "@bunli/core": "latest",
         "@pixelfactory/privatebin": "^2.6.2",
+        "bs58": "^6.0.0",
       },
       "devDependencies": {
         "@bunli/test": "latest",

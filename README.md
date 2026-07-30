@@ -85,6 +85,14 @@ video-link-debugger test --file links.txt
 ### Commands
 
 - `test` — Tests one or more video links and reports link information, network timings, seek behavior, and single- vs. multi-connection download speed.
+- `speedtest` — Speed tests TorBox CDNs (see below).
+- `view` — Fetches a **Results URL** produced by `test` or `speedtest` and re-renders the exact same result tables in the terminal:
+
+  ```bash
+  video-link-debugger view "https://privatebin.net/?<id>#<key>"
+  ```
+
+  Works with single-link results, combined multi-link results, and speedtest results (including the CDN location map).
 
 Links can be passed as positional arguments, with `--link`/`-l`, or with `--file`/`-f` pointing to a text file containing one link per line (blank lines and lines starting with `#` are ignored). All sources are combined and tested one after another.
 
