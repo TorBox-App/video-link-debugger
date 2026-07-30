@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.0](https://github.com/TorBox-App/video-link-debugger/compare/v1.1.0...v1.2.0) (2026-07-30)
+
+
+### Features
+
+* adds changing chunk size Fix: Change Video Buffer to 50MB ([7fd4c8a](https://github.com/TorBox-App/video-link-debugger/commit/7fd4c8a785a9c21a80bacafa464f821fada86ac2)), closes [#10](https://github.com/TorBox-App/video-link-debugger/issues/10)
+* adds map and map command ([d804f28](https://github.com/TorBox-App/video-link-debugger/commit/d804f289d506f0f5bb39012c092df16eed9efd9d))
+* adds speedtest command Feature: Add Speedtest command ([3855190](https://github.com/TorBox-App/video-link-debugger/commit/3855190c8053351f8b40b9d93091580d17c24aa2)), closes [#4](https://github.com/TorBox-App/video-link-debugger/issues/4)
+* adds testing multiple links Feature: Test multiple links ([a9dd01c](https://github.com/TorBox-App/video-link-debugger/commit/a9dd01ced3527804ab038def44a2040754b472cb)), closes [#7](https://github.com/TorBox-App/video-link-debugger/issues/7)
+* adds view pastebin Feature: Insert results url to load results formatted ([b458330](https://github.com/TorBox-App/video-link-debugger/commit/b4583308c6c7c1d916feeade4af41bdfe448755f)), closes [#8](https://github.com/TorBox-App/video-link-debugger/issues/8)
+* blurs filename ([8d33bcd](https://github.com/TorBox-App/video-link-debugger/commit/8d33bcddffc2deb49349d276c09e9c51078e4bfb))
+* creates a single script to install and run the application ([53eeb40](https://github.com/TorBox-App/video-link-debugger/commit/53eeb40314283e91223cb620120074d19fbcbbf4))
+* speedtest uploads to privatebin ([83e3976](https://github.com/TorBox-App/video-link-debugger/commit/83e397602f03761f9a1e7d7eb4b170463226f23c))
+
+
+### Bug Fixes
+
+* multi-connection download md5 now hashes the assembled file ([da66c5b](https://github.com/TorBox-App/video-link-debugger/commit/da66c5b89625daa4fbad91c98606a4540ce333c4))
+
 ## [1.1.0](https://github.com/TorBox-App/video-link-debugger/compare/v1.0.0...v1.1.0) (2026-05-10)
 
 
