@@ -118,6 +118,8 @@ video-link-debugger test https://example.com/video.mp4 -T -S        # only downl
 
 Speed tests TorBox CDNs using test files from the [TorBox API](https://api-docs.torbox.app/). By default it tests only the closest CDN. Each CDN's test file is downloaded twice — once over a single connection and once over 4 connections (configurable with `--connections`) — and both speeds are reported. The results table is a leaderboard sorted by the best achieved speed, with the closest CDN marked `*`. When more than one CDN is tested, the fastest one is highlighted in green.
 
+Before testing starts (and with `--list-regions`), a world map is drawn in the terminal showing where the CDNs are located, with a numbered marker and legend entry per location and the closest CDN highlighted. The map needs a terminal at least 74 columns wide and is skipped otherwise.
+
 ```bash
 video-link-debugger speedtest                    # closest CDN, short test file
 video-link-debugger speedtest -n 5               # top 5 CDNs, closest first
@@ -127,6 +129,7 @@ video-link-debugger speedtest -c 1               # single-connection pass only
 video-link-debugger speedtest -r weur            # only the weur region
 video-link-debugger speedtest --test-length long # bigger test file
 video-link-debugger speedtest --list-regions     # show available regions and exit
+video-link-debugger speedtest --map-only         # show the CDN map and exit
 ```
 
 #### `speedtest` flags
@@ -140,6 +143,7 @@ video-link-debugger speedtest --list-regions     # show available regions and ex
 | `--region <region>` | `-r` | Only test CDNs in this region (see `--list-regions`) |
 | `--user-ip <ip>` | `-u` | IP used to determine the closest server (default: the calling IP) |
 | `--list-regions` | `-R` | List the available regions and exit without testing |
+| `--map-only` | `-M` | Show the CDN location map and exit without testing (respects `--region`) |
 
 ## Development
 

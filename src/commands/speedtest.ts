@@ -17,6 +17,7 @@ import {
   type TableRow,
 } from "../library/tables";
 import { makeProgressBar } from "../library/progress";
+import { renderCdnMap } from "../library/map";
 
 const SPEEDTEST_API = "https://api.torbox.app/v1/api/speedtest";
 
@@ -136,6 +137,11 @@ export default defineCommand({
       short: "R",
       argumentKind: "flag",
     }),
+    mapOnly: option(z.boolean().default(false), {
+      description: "Show the CDN location map and exit without testing",
+      short: "M",
+      argumentKind: "flag",
+    }),
   },
   handler: async ({ flags }) => {
     let files: SpeedtestFile[];
@@ -166,6 +172,18 @@ export default defineCommand({
           files.map((f) => [f.region, f.name, f.closest ? "✓" : ""]),
         ),
       );
+      const map = renderCdnMap(files);
+      if (map) console.log(map);
+      return;
+    }
+
+    if (flags.mapOnly) {
+      const map = renderCdnMap(files);
+      if (map) console.log(map);
+      else
+        console.error(
+          "Map unavailable: no CDN coordinates or terminal narrower than 74 columns.",
+        );
       return;
     }
 
@@ -174,6 +192,8 @@ export default defineCommand({
     console.log(
       `Testing ${selected.length} of ${files.length} CDNs (test_length: ${flags.testLength})`,
     );
+    const map = renderCdnMap(selected);
+    if (map) console.log(map);
 
     const doMulti = flags.connections > 1;
     const results: CdnResult[] = [];
